@@ -1,31 +1,42 @@
-What This Is
-This is the MVP (v1) of a dual-agent AI chatbot platform deployed for enterprise pharma clients. The platform houses two distinct AI agents in a single Chainlit application — users switch between them via a bot selector in the UI:
-BotNameWhat it does🤖 C3POStructured Data AgentConverts natural language questions into SQL → queries Databricks SQL Warehouse → returns charts, insights, and downloadable reports🔍 R2D2Semi-Structured RAG AgentRuns hybrid search (BM25 + k-NN vector) on Amazon OpenSearch to retrieve HCP opinions, market research, and qualitative intelligence
-Key architectural decision: This MVP implements the full multi-agent orchestration loop — intent classification, tool routing, state management, multi-turn memory — entirely in pure Python without LangGraph or LangChain agents. Every state transition is explicit, every tool call is traceable.
 
-Architecture
+# C3PO & R2D2: Dual-Agent AI Chatbot Platform (MVP v1)
+
+![Python](https://img.shields.io/badge/python-3.11-blue.svg)
+![Framework](https://img.shields.io/badge/framework-Chainlit-red.svg)
+![LLM](https://img.shields.io/badge/llm-Claude%203.5%20Sonnet-orange.svg)
+![Deployment](https://img.shields.io/badge/deployment-AWS%20EKS%20%2F%20Docker-blue.svg)
+
+This repository contains the Minimum Viable Product (MVP v1) of a dual-agent AI platform deployed for enterprise pharmaceutical clients. The application houses two distinct, specialized AI agents inside a single unified Chainlit interface, allowing users to seamlessly switch context depending on their analytical needs.
+
+> 💡 **Key Architectural Choice:** This MVP implements the complete multi-agent orchestration loop—intent classification, tool routing, state management, and multi-turn memory—**entirely in pure Python** without relying on LangGraph or LangChain agents. Every state transition is explicit, and every tool call is completely traceable.
+
+---
+
+## 🏗️ System Architecture
+
+```text
 User (Chainlit UI)
         │
         ▼
 ┌───────────────────────────────────────────┐
 │           chainlit_bot_main.py            │
 │   - Password auth & session management    │
-│   - Bot switching (C3PO ↔ R2D2)          │
-│   - Message routing & history tracking   │
-│   - Async message loop (MAX_ITER=15)     │
+│   - Bot switching (C3PO ↔ R2D2)           │
+│   - Message routing & history tracking    │
+│   - Async message loop (MAX_ITER=15)      │
 └────────────┬──────────────────────────────┘
              │
     ┌────────┴────────┐
     ▼                 ▼
-┌─────────┐    ┌──────────────┐
-│  C3PO   │    │    R2D2      │
-│Structured│   │Semi-Structured│
-│  Bot    │    │    Bot        │
-└────┬────┘    └──────┬───────┘
-     │                │
-     ▼                ▼
+┌─────────┐     ┌──────────────┐
+│  C3PO   │     │     R2D2     │
+│Structured│     │Semi-Structured│
+│   Bot   │     │     Bot      │
+└────┬────┘     └──────┬───────┘
+     │                 │
+     ▼                 ▼
 ┌──────────────────────────────┐
-│       ToolCalls.py           │
+│         ToolCalls.py         │
 │  Tool Registry & Executor    │
 │  ┌──────────────────────┐   │
 │  │ GenerateSQLCode      │   │  ← C3PO path
@@ -41,167 +52,201 @@ User (Chainlit UI)
            │
     ┌──────┴──────┐
     ▼             ▼
-┌─────────┐  ┌──────────────┐
-│Databricks│  │Amazon        │
-│SQL       │  │OpenSearch    │
-│Warehouse │  │(Hybrid Search│
-│          │  │BM25 + k-NN) │
-└─────────┘  └──────────────┘
+┌─────────┐   ┌──────────────┐
+│Databricks│   │Amazon        │
+│SQL       │   │OpenSearch    │
+│Warehouse │   │(Hybrid Search│
+│          │   │BM25 + k-NN)  │
+└─────────┘   └──────────────┘
+🤖 The Agents
+Agent	Core System	Capabilities & Workflow
+🤖 C3PO	Structured Data Agent	Converts natural language questions into executable SQL → queries Databricks SQL Warehouse → returns analytical charts, data insights, and downloadable assets.
+🔍 R2D2	Semi-Structured RAG Agent	Runs hybrid lexical/semantic search on Amazon OpenSearch to retrieve qualitative data such as HCP opinions, market research, and qualitative intelligence.
+🛠️ Key Technical Decisions (Why No LangGraph?)
+This MVP was built to validate core capabilities before moving to framework-driven orchestration in production v2. It demonstrates how complex multi-agent state machines can be robustly implemented in pure Python:
 
-Key Technical Decisions (Why No LangGraph?)
-This MVP was built before adopting LangGraph in the production v2. The architecture demonstrates that you can implement multi-agent state machines in pure Python:
-Custom State Management
-Instead of LangGraph's StateGraph, we use cl.user_session (Chainlit's session store) as the state container:
-python# State is maintained explicitly per session
-message_history = cl.user_session.get("message_history")   # full conversation
-chatbot_name    = cl.user_session.get("chatbot")           # active bot
-tool_params     = cl.user_session.get("tool_params")       # current tool state
-Custom Tool Registry (ToolCallsExecutor)
-Instead of LangChain's tool decorators, tools are registered in a factory map:
-pythonself.tool_map = {
+1. Explicit State Management
+Instead of an abstraction like StateGraph, we utilize Chainlit's native session store (cl.user_session) as our source of truth. State is maintained explicitly per session:
+
+Python
+# State is tracked and modified manually per conversation session
+message_history = cl.user_session.get("message_history")   # Full history context
+chatbot_name    = cl.user_session.get("chatbot")           # Currently active agent
+tool_params     = cl.user_session.get("tool_params")       # Current tool runtime state
+2. Custom Factory Tool Registry
+Instead of relying on magic wrappers or auto-decorators, tools are registered cleanly via a factory pattern map within a dedicated ToolCallsExecutor:
+
+Python
+self.tool_map = {
     "run_hybrid_search":        lambda: RunHybridSearch(self.opensearch),
     "run_sql_on_opensearch":    lambda: RunSqlOnOpensearch(self.opensearch),
     "generate_sql_code":        lambda: GenerateSQLCode(),
     "python_after_sql":         lambda: PythonAfterSQL(),
     "create_presentation_deck": lambda: CreatePresentationDeck(),
     "calculate_date_ranges":    lambda: CalculateDateRange(),
-    ...
 }
-Each tool is a class inheriting from BaseTool with an async run() method — clean, testable, and independently deployable.
-Multi-Turn Agent Loop
-The agentic loop runs for MAX_ITER=15 iterations — the LLM decides when to stop by returning a final answer instead of a tool call:
-User Query → LLM → Tool Call? → Execute Tool → Feed result back to LLM → Repeat
-                 → Final Answer? → Stream to UI → Done
+Each tool is implemented as an isolated class inheriting from a base contract, enforcing cleaner testability and independent deployment.
 
-Project Structure
+3. Multi-Turn Autonomous Agent Loop
+The execution loop runs safely up to MAX_ITER=15. The LLM dynamically evaluates context at each turn to decide whether to continue calling tools or output a final answer:
+
+Plaintext
+User Query ──> LLM ──> Tool Call? ──> Execute Tool ──> Feed Back to LLM ──┐
+                        ▲                                                 │
+                        └─────────────────────────────────────────────────┘
+                        ──> Final Answer? ──> Stream to UI ──> [Done]
+🌟 Core Features
+📊 C3PO — Structured Data Agent
+Text-to-SQL Engine: Generates highly targeted Databricks SQL text directly from natural, conversational English queries.
+
+Live Warehouse Execution: Communicates directly with Databricks SQL Warehouses utilizing robust connection pooling and automatic token refreshes.
+
+Dynamic Chart Generation: Safely executes programmatic python plotting (Matplotlib/Plotly) on top of SQL returns to render native charts directly inline inside the chat window.
+
+PowerPoint Generation: Features a CreatePresentationDeck tool that automatically updates templates and exports customized slide charts using python-pptx.
+
+Temporal Intelligence: A specialized CalculateDateRanges module programmatically infers dynamic pharma timelines (like R4W, R12M, R13W, QTD) using the latest weekend processing date—removing any manual date selection requirements.
+
+🔍 R2D2 — Semi-Structured RAG Agent
+Hybrid Vector Search: Blends lexical BM25 matching and semantic k-NN vector search inside Amazon OpenSearch to optimize target match accuracy.
+
+Multi-Index Routing: Automatically targets specific OpenSearch indices (e.g., PMR, Market Map, Early Experience, PBC Market Research) based on the user's active sub-profile.
+
+OpenSearch SQL Retrieval: Executes structured SQL expressions against document stores for rapid, complex filtering of raw metadata.
+
+Synthesis & Citation: Features a dedicated TextProcessor that synthesizes retrieved data blocks into localized summaries complete with source-document attributions.
+
+🧱 Tools Directory
+Tool Code Name	Bot	Purpose / Functional Description
+generate_sql_code	C3PO	LLM translates incoming user query into Databricks SQL syntax.
+python_after_sql	C3PO	Spawns python runtime tasks on tabular outputs to handle calculations and data visualization.
+create_presentation_deck	C3PO	Rewrites and updates slide files using fresh query results.
+calculate_date_ranges	C3PO	Dynamically calculates pharma-specific standard date windows (QTD, R12M, etc.).
+run_hybrid_search	R2D2	Combines sparse and dense vectors for advanced OpenSearch queries.
+run_sql_on_opensearch	R2D2	Queries OpenSearch indexes using SQL semantics rather than DSL.
+text_processor	R2D2	Aggregates and synthesizes disparate context passages into comprehensive insights.
+insights_response	Both	Formats structural analytical breakdowns post-processing loop.
+calculate_nsp_capture_ratio	C3PO	Industry-specific calculation engine for Net Selling Price capture rates.
+💻 Tech Stack
+User Interface Framework: Chainlit (Async Python)
+
+Large Language Model Layer: Claude 3.5 Sonnet (Via Databricks Mosaic AI Model Serving Endpoint)
+
+Structured Storage Environment: Databricks SQL Warehouse (via high-performance JDBC connectivity)
+
+Vector Search & Document Database: Amazon OpenSearch (k-NN + BM25 Search Engine)
+
+Orchestration Engine: Pure Python Event Architecture + Factory Pattern Executors
+
+Document Generation Suite: Matplotlib, Plotly, python-pptx, openpyxl, Pandas
+
+Container Infrastructure & Scaling: Docker (Python 3.11-bookworm base) deployed to AWS EKS via Helm charts
+
+📂 Project Structure
+Plaintext
 C3PO_MVP/
 ├── c3po/
-│   ├── chainlit_bot_main.py          # Main entry point — Chainlit app, auth, routing
-│   ├── ToolCalls.py                  # All tool implementations + ToolCallsExecutor
-│   ├── sql_warehouse_handling.py     # Databricks SQL Warehouse connector
-│   ├── CopyFolder.py                 # Config/input file management utility
-│   ├── Dockerfile                    # Production Docker image (Python 3.11, port 80)
-│   ├── requirements.txt              # All dependencies
+│   ├── chainlit_bot_main.py          # Application core — entry point, auth loop, profile routing
+│   ├── ToolCalls.py                  # Core Tool definitions and the ToolCallsExecutor registry
+│   ├── sql_warehouse_handling.py     # Connectors & data streams for Databricks Warehouse
+│   ├── CopyFolder.py                 # File handling utility for configuration payloads
+│   ├── Dockerfile                    # Optimized multi-stage production Docker definition
+│   ├── requirements.txt              # Application-wide python dependencies
 │   │
-│   ├── Structured_Bot/               # C3PO modules
-│   │   ├── agent_tools.py            # SalesPerformanceMetrics, DeckCreator
-│   │   ├── llm_requests_new.py       # LLM wrapper (Claude 3.5 via Databricks endpoint)
-│   │   ├── helper.py                 # FileNameExtractor, utilities
-│   │   └── ...
+│   ├── Structured_Bot/               # C3PO Specific Intelligence Module
+│   │   ├── agent_tools.py            # SalesPerformanceMetrics execution, PowerPoint utilities
+│   │   ├── llm_requests_new.py       # Databricks Claude 3.5 API management and schema prompts
+│   │   └── helper.py                 # Core text parse systems and file clean up modules
 │   │
-│   ├── Semi_Structured_Bot/          # R2D2 modules
-│   │   ├── opensearch_execution.py   # Hybrid search (BM25 + k-NN) on OpenSearch
-│   │   └── ...
+│   ├── Semi_Structured_Bot/          # R2D2 Specific Intelligence Module
+│   │   └── opensearch_execution.py   # Hybrid query logic and OpenSearch communication layers
 │   │
-│   ├── Gilead/                       # Client-specific modules
-│   │   ├── chatbot_handler.py        # Chat start / settings handler
-│   │   ├── chatbot_manager.py        # Bot switching logic
-│   │   ├── llm_requests_new.py       # LLM request builder
-│   │   ├── sending_req_to_llm.py     # Async LLM request execution
-│   │   └── ...
+│   ├── Gilead/                       # Pharmaceutical Domain Configuration
+│   │   ├── chatbot_handler.py        # Configures interface settings upon user login
+│   │   ├── chatbot_manager.py        # Directs agent routing tables based on active selections
+│   │   └── sending_req_to_llm.py     # Executes asynchronous network calls out to model endpoints
 │   │
-│   └── Files_Images_Handling/        # Chart/Excel/PPTX file delivery to UI
-│       └── ElementsHandling          # Chainlit file/image element management
-
-Core Features
-C3PO — Structured Data Agent
-
-Natural Language → SQL: LLM generates Databricks SQL from plain English queries
-Live Data Fetching: Queries Databricks SQL Warehouse with connection pooling and auto token refresh
-Chart Generation: Executes Python code to generate Matplotlib/Plotly charts inline in chat
-PowerPoint Deck Creation: CreatePresentationDeck tool auto-updates slide charts from SQL results using python-pptx
-Date Intelligence: CalculateDateRanges computes R4W, R12M, R13W, QTD ranges from latest weekend date — no manual date entry needed
-Multi-turn Memory: Full conversation history maintained per session, revised query sent to LLM to preserve context
-
-R2D2 — Semi-Structured RAG Agent
-
-Hybrid Search: Combines BM25 (keyword) + k-NN (semantic vector) search on Amazon OpenSearch — catches both exact keyword matches and semantic intent
-Multi-Index Support: Routes to different OpenSearch indices based on bot profile (PMR, Market Map, Early Experience, PBC Market Research)
-SQL on OpenSearch: Executes SQL-style queries against OpenSearch for structured retrieval from unstructured data
-Text Processor: LLM synthesises retrieved chunks into a coherent insight response with source attribution
-
-Platform-Level Features
-
-Password Auth: @cl.password_auth_callback — role-based user authentication without OAuth overhead
-Bot Switching: Users switch between C3PO and R2D2 via Chainlit's chat profile selector — state resets cleanly on switch
-File Delivery: Charts (PNG), Excel files, and PowerPoint decks delivered as inline Chainlit elements then cleaned from disk
-Clickable Questions: ClickableQuestionHandler — LLM suggests follow-up questions as clickable buttons in UI
-Async Throughout: All tool execution, LLM calls, and file handling are async/await — no blocking operations
-
-
-Tools Implemented
-ToolBotDescriptiongenerate_sql_codeC3POLLM generates Databricks SQL from user querypython_after_sqlC3POExecutes Python on SQL results for charts/analysiscreate_presentation_deckC3POAuto-refreshes PowerPoint charts from live SQL datacalculate_date_rangesC3POComputes R4W/R12M/QTD date ranges automaticallyrun_hybrid_searchR2D2BM25 + k-NN hybrid search on OpenSearchrun_sql_on_opensearchR2D2SQL-style queries on OpenSearch indicestext_processorR2D2LLM synthesis of retrieved chunks into insightsinsights_responseBothPost-response insight generation modulecalculate_nsp_capture_ratioC3POPharma-specific NSP capture rate calculation
-
-Tech Stack
-LayerTechnologyUI FrameworkChainlit (async Python chat UI)LLMClaude 3.5 Sonnet via Databricks Mosaic AI endpointStructured DataDatabricks SQL Warehouse (JDBC connector)Vector SearchAmazon OpenSearch (BM25 + k-NN hybrid)State ManagementPure Python + Chainlit user sessionTool OrchestrationCustom ToolCallsExecutor (factory pattern)File GenerationMatplotlib, python-pptx, openpyxl, PandasContainerisationDocker (Python 3.11-bookworm)DeploymentAWS EKS (Kubernetes) via Helm + CI/CDAuthChainlit password auth callback
-
-How to Run Locally
+│   └── Files_Images_Handling/        # User Interface Media Pipelines
+│       └── ElementsHandling.py       # Assembles inline graphics, sheets, and slide presentations
+🚀 How to Run Locally
 Prerequisites
+Python 3.11 Installed locally
 
-Python 3.11+
-Databricks workspace with SQL Warehouse
-Amazon OpenSearch domain
-Claude 3.5 Sonnet access via Databricks Mosaic AI Gateway
+Access to an active Databricks Workspace (with a configured SQL Warehouse)
 
-Setup
-bash# 1. Clone the repo
-git clone https://github.com/ShashiKumarVemula/C3PO_MVP.git
+A running Amazon OpenSearch Domain
+
+Claude 3.5 Sonnet access provisioned via Databricks Mosaic AI Gateway
+
+Installation Steps
+Clone the project code:
+
+Bash
+git clone [https://github.com/ShashiKumarVemula/C3PO_MVP.git](https://github.com/ShashiKumarVemula/C3PO_MVP.git)
 cd C3PO_MVP/c3po
 
-# 2. Create virtual environment
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
 
-# 3. Install dependencies
+2. **Establish a clean virtual environment:**
+   ```bash
+   python -m venv venv
+   source venv/bin/activate  # On Windows use: venv\Scripts\activate
+   
+Install application dependencies:
+
+Bash
 pip install -r requirements.txt
 
-# 4. Configure environment variables
-cp .env.example .env
-# Fill in your credentials (see Environment Variables section)
 
-# 5. Run the app
+4. **Environment Variables Configuration:**
+   ```bash
+   cp .env.example .env
+   # Open .env and fill in your target cluster credentials securely
+Launch the local web server:
+
+Bash
 chainlit run chainlit_bot_main.py --host 0.0.0.0 --port 8000
-Docker
-bash# Build
-docker build -t c3po-mvp .
 
-# Run
-docker run -p 80:80 --env-file .env c3po-mvp
-Environment Variables
-Create a .env file with the following (never commit real values):
-env# Databricks
-DATABRICKS_TOKEN=your_token_here
+
+### Running with Docker
+
+*   **Build the Image locally:**
+    ```bash
+    docker build -t c3po-mvp .
+    ```
+*   **Run the Container:**
+    ```bash
+    docker run -p 80:80 --env-file .env c3po-mvp
+    
+🔒 Environment Variables Reference
+Ensure your .env file contains these specific keys before booting up the application:
+
+Code snippet
+# Databricks Connectivity Parameters
+DATABRICKS_TOKEN=your_secret_token_here
 DATABRICKS_HOST=dbc-xxxxxxxx.cloud.databricks.com
 DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/your_warehouse_id
 DATABRICKS_ENDPOINT_URL=https://your-mosaic-endpoint/serving-endpoints/claude/invocations
 
-# Amazon OpenSearch
-OPENSEARCH_HOST=your-opensearch-domain
+# Amazon OpenSearch Vector Credentials
+OPENSEARCH_HOST=your-opensearch-domain-endpoint
 OPENSEARCH_USERNAME=your_username
 OPENSEARCH_PASSWORD=your_password
 
-# Bot Configuration
+# Client Sub-Profile Definitions
 BOT_TYPE_PMR=PMR
 BOT_TYPE_MARKET_MAP=MarketMap
 BOT_TYPE_EARLY_EXP=EarlyExperience
 BOT_TYPE_PBC_MARKET_RESEARCH=PBCMarketResearch
+📈 Evolutionary Retrospective (v1 MVP vs. v2 Production)
+Building this application without an orchestration framework provided foundational design patterns that directly scaled into our production release:
 
-What Makes This Different
-Most LLM demos call an API and print the response. This system:
+Architecture Design Dimension	MVP v1 (This Repository)	Production v2 Engine
+Agent Orchestration	Pure Python Engine + cl.user_session loops	LangGraph StateGraph Ecosystem
+Tool Execution Routing	Conditional Control Blocks (if/else Factory Map)	LangGraph Conditional Routing Edges
+State Persistence	Transient Chainlit Context Sessions	LangGraph MemorySaver + Checkpointers
+Multi-Agent Interacting	UI-driven active Profile Swapping	Autonomous Graph with Dedicated Execution Nodes
+Observability & Analytics	Terminal Log Stream Expressions	Dynatrace APM Monitoring + Structured JSON Logs
+🧑‍💻 Author
+Shashi Kumar Vemula – AI/ML Engineer
 
-Manages full multi-turn state without a framework — pure Python session management
-Executes real code — generates and runs Python in a managed REPL, sends charts back to users
-Generates and delivers PowerPoint decks from live SQL data — not static templates
-Routes between two agents based on query type and user-selected profile
-Handles production concerns — token refresh, connection pooling, file cleanup, async throughout, error recovery
-Is containerised and Kubernetes-ready — Dockerfile + Helm-deployable to AWS EKS
-
-
-What I Learned / What v2 Changed
-This MVP was a proof of concept that directly informed the production v2:
-DecisionMVP (This repo)Production v2Agent orchestrationPure Python + custom stateLangGraph StateGraphTool routingCustom factory + if/elseLangGraph conditional edgesState persistenceChainlit sessionLangGraph MemorySaver + checkpointingMulti-agentBot switching via UIAgent graph with dedicated nodesObservabilityPrint statementsDynatrace APM + structured logging
-The MVP proved the product concept and the tool architecture — the BaseTool interface and ToolCallsExecutor registry pattern carried forward directly into v2.
-
-Author
-Shashi Kumar Vemula — AI/ML Engineer
-Built at Setuserv Informatics Pvt. Ltd. — pharma enterprise AI 
+Engineered at Setuserv Informatics Pvt. Ltd. – Custom Intelligent Agents for Enterprise Pharmaceutical Analytics.
