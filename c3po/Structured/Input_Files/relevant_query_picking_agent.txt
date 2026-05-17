@@ -1,0 +1,14 @@
+Identify Top 2 Similar Queries
+Based on the user's question, 
+Your task is to: 
+a. Search {queries_code} for the queries most similar to the user's question.
+b. Rank them by relevance.
+c. Extract the top 2 queries, including their full text and codes.
+d. Focus on query logic and structure rather than specific literal values (like years, dates, names, or IDs).
+
+Output: Return the top 2 queries and their respective codes.
+
+
+
+
+

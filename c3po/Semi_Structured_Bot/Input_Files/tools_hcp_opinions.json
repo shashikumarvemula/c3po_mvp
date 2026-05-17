@@ -1,0 +1,35 @@
+[{
+    "type": "function",
+    "function": {
+        "name": "run_hybrid_search",
+        "description": "Generates a precise OpenSearch query for healthcare professional opinion data. This function creates an optimized search query that uses the exact minimum number of filters needed (maximum 3 keyword filters) with proper syntax and structure. It follows mapping rules for author names, drug names, clinical trials, sentiment, diseases, and time periods. It includes semantic search (kNN embeddings) only when content analysis is needed for questions about opinions, summarization, or analysis. The function returns a properly formatted JSON search query with '_source': True (capital T) and appropriate filters based on the user's question.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "query": {
+                    "type": "object",
+                    "description": "The OpenSearch query object with properly structured bool queries, must clauses, filters, and embedding vectors (when needed). The query should follow the structure: { 'query': { 'bool': { 'must': [...] } }, '_source': True, 'size': 50 }. Use kNN for semantic search only when necessary for analyzing post content. Filters should match appropriate columns (Author, Drugs present in the Post, Clinical Trials present in the Post, etc.)."
+                }
+            },
+            "required": ["query"]
+        }
+    }
+},
+{
+  "type": "function",
+  "function": {
+    "name": "run_sql_on_opensearch",
+    "description": "Generates and executes SQL queries on OpenSearch for analytical questions about healthcare professional opinion data. This function is optimized for questions involving aggregations, trends over time, counts, group-by operations, and statistical analysis where embeddings/semantic search is not needed. It generates precise SQL syntax compatible with OpenSearch SQL plugin.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "The SQL query string to be executed on OpenSearch. The query should be properly formatted SQL with appropriate SELECT, FROM, WHERE, GROUP BY, ORDER BY, and other clauses as needed. Use the table name 'healthcare_posts' for all queries. Follow mapping conventions for column names: 'Author' for author names, 'DrugsMentioned' for drug names, 'ClinicalTrialsMentioned' for clinical trials, 'DiseasesMentioned' for diseases, 'PostDate' for timestamps, 'PostText' for content, and 'Sentiment' for sentiment values. Date functions should be used for time-based aggregations (e.g., MONTH, YEAR). Limit results to a reasonable number when appropriate."
+        }
+      },
+      "required": ["query"]
+    }
+  }
+}      
+]

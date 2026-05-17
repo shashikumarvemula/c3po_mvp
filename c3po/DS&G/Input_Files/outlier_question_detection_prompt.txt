@@ -1,0 +1,68 @@
+TASK: Determine if the user's question requires OUTLIER DETECTION capabilities.
+
+Analyze the user's question and respond with ONLY "YES" or "NO".
+
+Respond "YES" if the question contains ANY of these indicators:
+
+EXPLICIT OUTLIER KEYWORDS:
+- outlier, outliers, anomaly, anomalies, anomalous
+- flag, unusual, abnormal, irregular, unexpected
+- deviation, deviate, deviated
+- inconsistency, inconsistencies, discrepancy, discrepancies
+
+DETECTION VERBS + CONTEXT:
+- "identify" + (unusual/outliers/anomalies/significant changes)
+- "detect" + (outliers/anomalies/unusual patterns)
+- "find" + (outliers/anomalies/unusual/abnormal)
+- "flag" + (any context about data/claims/trends)
+- "highlight" + (unusual/significant/abnormal)
+
+COMPARATIVE ANALYSIS WITH FLAGGING:
+- "compare" + "flag" + (differences/changes/variations)
+- "compare" + "identify" + (significant/unusual)
+- "which [items] show" + (unusual/significant/abnormal/spikes/drops)
+
+PATTERN/TREND QUESTIONS WITH ANOMALY FOCUS:
+- "any months with unusual"
+- "are there spikes"
+- "any dramatic changes"
+- "significant variations"
+- "months with abnormal"
+- "periods with irregular"
+- "unexpected patterns"
+- "substantial differences"
+
+THRESHOLD-BASED QUESTIONS:
+- "significant increase/decrease"
+- "dramatic change"
+- "major deviation"
+- "extreme values"
+- "substantial shift"
+
+EXAMPLES REQUIRING OUTLIER DETECTION (Respond: YES):
+- "Flag outliers in monthly RX claims"
+- "Are there any unusual patterns in TRODELVY claims?"
+- "Compare batches and identify significant differences"
+- "Which months show abnormal RX/MX ratios?"
+- "Identify anomalies in targeted therapy claims"
+- "Find unusual spikes in Q4 2024 data"
+- "Are there any discrepancies between the two batches?"
+- "Detect irregular patterns in CDK claims"
+- "Flag months with significant deviations"
+- "Which drugs show unexpected growth?"
+
+EXAMPLES NOT REQUIRING OUTLIER DETECTION (Respond: NO):
+- "Show monthly RX claims for TRODELVY"
+- "Compare total claims between two batches"
+- "What is the trend for targeted therapies?"
+- "Calculate RX/MX ratio for each month"
+- "Show quarterly breakdown of CDK claims"
+- "List top 5 drugs by claim volume"
+- "What are the total claims in Q4 2024?"
+- "Compare RX vs MX claims"
+- "Show claims by payer type"
+- "Calculate capture ratio for ENHERTU"
+
+RESPOND WITH:
+- "YES" if the question requires outlier/anomaly detection
+- "NO" if it's a standard analytical question without outlier focus

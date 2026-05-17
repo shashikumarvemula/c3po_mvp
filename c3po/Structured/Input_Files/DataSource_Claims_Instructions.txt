@@ -1,0 +1,629 @@
+column descriptions of the claims_data:
+{
+    "claim_description": null,
+    "claim_id": null,
+    "claim_source": null,
+    "claim_type": null,
+    "days_supply": null,
+    "diagnosis_code": null,
+    "indication": "sample values in this column are ['TNBC', 'HR+/HER2-']",
+    "line_end_date": null,
+    "line_start_date": null,
+    "Line_of_Therapy_LOT": "in which line of treatment the patients are in - sample values are [1, 2, 3, 4, 5, 6, 7, 8, ..., 12]",
+    "molecule_name": null,
+    "ndc11": null,
+    "new_patient_flag": "sample values in this column are [1, 0] where 1 indicates new patient",
+    "patient_birth_year": "used to calculate the age of the patient",
+    "NPI_HCP_number": "sample values are [1255644357.0, 1295170793.0, 1568463305.0, etc.]",
+    "patient_id": null,
+    "procedure_code": "This column contains codes contains surgery and bc surgery codes select this when user ask about any surgery codes etc.",
+    "product_name": "sample product names present are ['TRUQAP', 'CYCLOPHOSPHAMIDE', 'LETROZOLE', 'ANASTROZOLE', 'ZOLADEX', 'FULVESTRANT', 'PACLITAXEL', 'EXEMESTANE', 'LEUPROLIDE ACE', 'DOCETAXEL', 'HALAVEN', 'EVEROLIMUS', 'TALZENNA', 'TAMOXIFEN CIT', 'DOXORUBICIN HCL', 'VERZENIO', 'TRODELVY', 'IBRANCE', 'KISQALI', 'PIQRAY', 'CAPECITABINE', 'ENHERTU', 'ORSERDU', 'LYNPARZA', 'FLUOROURACIL', 'KISQALI FEMARA', 'GEMCITABINE HCL', 'METHOTREXATE SOD', 'ARIMIDEX', 'MEGESTROL ACE', 'FEMARA', 'AROMASIN', 'VINORELBINE TART', 'XELODA', 'nan', 'AFINITOR', 'IXEMPRA', 'SOLTAMOX', 'TOREMIFENE CIT', 'LUPRON DEPOT-1MO.', 'EPIRUBICIN HCL', 'FASLODEX', 'FARESTON', 'ABRAXANE', 'TREXALL', 'ELIGARD', 'LUPRON DEPOT-3MO.', 'DOXORUBICIN LIPO', 'ELLENCE', 'MEGACE', 'DOXIL', 'ADRIAMYCIN', 'ADRIAMYCIN PFS', 'KEYTRUDA', 'OXALIPLATIN', 'CARBOPLATIN', 'TECENTRIQ', 'IRINOTECAN HCL', 'CISPLATIN', 'ATEZOLIZUMAB', 'ONIVYDE', 'TRAZIMERA', 'PHESGO', 'NEOSAR', 'CYTOXAN']",
+    "quantity": null,
+    "regimen_breakout": null,
+    "regimen_end_date": null,
+    "regimen_grouped_name": "drug names are present in this column sample values are = ['ANTHRACYCLINE BASED', 'CDK', 'ENHERTU BASED', 'FULVESTRANT BASED', 'GEMZAR BASED', 'HALAVEN BASED', 'ORSERDU BASED', 'OTHER CHEMO', 'OTHER COMBINATION CHEMO', 'OTHER HORMONAL', 'OTHER SINGLE CHEMO', 'OTHER TARGETED', 'PARP BASED', 'PD-1/PD-L1 BASED', 'PLATINUM BASED', 'TAXANE BASED', 'TRODELVY BASED', 'VINORELBINE BASED', 'XELODA BASED']",
+    "regimen_group_adjustment_factor": null,
+    "regimen_length": null,
+    "regimen_name": null,
+    "regimen_start_date": null,
+    "service_date": null,
+    "service_number": null,
+    "source_of_business": "indicates which drugs the patient was previously taking",
+    "total_patient_flag": null,
+    "pt_batch_id": null,
+    "Year_Month": "start year_month of regimen group -> contains combination of only year and month ('YYYYMM' -> '202306'), use this for R3M/R12M/monthly analysis",
+    "Regimen_Group": null,
+    "EPI_Factor": null,
+    "Monthly_Adjusted_Count": null,
+    "Year": "sample values are [2022, 2023, 2024] contains string values",
+    "Quarter": "sample values are [1, 2, 3, 4]",
+    "NPI_HCP_tier": "sample values are ['Tier 1', 'Tier 3', 'Tier 2', 'No Tier']"
+  }
+  these are the available columns in the data use the appropriate columns accordingly to the user questions.
+
+- If a question does not mention a specific drug, assume it refers to Trodelvy (for both indications). Automatically revise the query to include Trodelvy and apply a filter for Trodelvy in the analysis steps.
+For example, if the question is: "In lot 2, how is NPS share trending by month for TNBC?" interpret this as: "In lot 2, how is NPS share trending by month for TNBC for Trodelvy?"
+- Integrate this into the analysis process for questions without a specified drug:
+Filter Data for Trodelvy: If the drug isn’t specified, assume the query concerns Trodelvy, and filter data accordingly.
+- Filter the Data to include records that meet the specified conditions.(ex:For rolling 3-month shares for each month in 2023, include data from November 2022 onward to get the R3M shares for January'23 and February'23)
+
+Definitions:
+    NPS -  New Patients Starts (filter for new patients), Physiscian/oncologist - HCP(Health care practitioner), TPS - Total Patient Shares, TRO - Trodelvy
+
+Business Rules for Claims Data:
+ - If any drug or product name mentioned in the user's query is not present in regimen_grouped_name, check for other relevant columns such as product_name or molecule_name.
+ - For weekly or monthly analyses, use the Year_Month column.
+ - 8L+ refers to line of therapy greater than or equal to 8.
+ - Treat any mentions of 'mTNBC' or 'mtnbc' as equivalent to 'TNBC'. 
+ - For information related to patient , use Monthly_Adjusted_Count field.
+ - For information related to switching of patients from one drug to another drug understand the source_of_business column - which means the drug consumed by patients earlier.
+    Example:
+        - whenever patients switch to a drug , source_of_business should include all values except that drug.
+        - whenever patients switch from a drug source_of_business should eqaul to that drug.
+-  While calculating the age of the patient, you should strictly not consider the null values or '0' values in the "patient_birth_year" column.
+- For source_of_business calculations use the filter for new_patient_flag.
+
+DEFAULT CONSIDERATIONS(for all user questions follow):
+ - ALWAYS consider the `Monthly_Adjusted_Count` column to count no of patient.
+    - For any question if user ask/mention the patient count ALWAYS CONSIDER THE `Monthly_Adjusted_Count` column not patient_id.
+ eg. if user ask How many patients are tagged as 1L mTNBC? or any patient count related questions ALWAYS strictly use the `Monthly_Adjusted_Count` count column. 
+
+WHEN USER ASKS/MENTIONS ABOUT 1L+ APPROVED PRODUCTS/DRUGS (strictly use the `product_name` column to answer):{
+
+  a. STEP 1: IDENTIFY THE INDICATION
+     - If query is about TNBC, use TNBC drug list
+     - If query is about HR+/HER2-, use HR+/HER2- drug list
+
+  b. STEP 2: USE ONLY THE APPROVED DRUG LISTS BELOW
+     - 1L+ APPROVED DRUGS FOR TNBC: Trodelvy, Enhertu, Talzenna, Atezolizumab
+     - 1L+ APPROVED DRUGS FOR HR+/HER2-: Trodelvy, Enhertu, Ibrance, Kisqali, Fulvestrant, Orserdu, Afinitor, Piqray, Talzenna, Capecitabine
+
+  c. STEP 3: SEARCH METHODOLOGY
+     - Search for these drugs in the `product_name` column
+     - Use ILIKE '%drug_name%' pattern matching
+     - Do NOT include any other drugs outside this approved list
+
+  d. STEP 4: QUERY STRUCTURE
+     - Filter data using WHERE `product_name` ILIKE '%[approved_drug_name]%'
+     - ALWAYS filter for `Line_of_Therapy_LOT` >= 1 when mentioned as 1L+
+
+  e. STEP 5: GROUPING AND PRESENTATION STRUCTURE FOR 1L+ APPROVED PRODUCTS
+     
+     - Group and present data EXACTLY as the user requests (by drug, indication, metric, or comparison format)
+     - NEVER merge TNBC and HR+/HER2- indications together - ALWAYS keep them separate with clear labels
+     - NEVER merge different products together - each drug must have its own distinct data row/section, even if approved for both indications (e.g., show "Trodelvy for TNBC" and "Trodelvy for HR+/HER2-" separately)
+
+  f. IMPORTANT: Only consider drugs from the above approved lists when user specifically asks for 1L+ approved products/drugs. Do not include any other medications or treatments outside this defined scope.}
+
+WHEN USER ASKS/MENTIONS ABOUT CDK-MONO OR CDK-COMBO DRUGS/THERAPY OR THERAPIES ALWAYS FOLLOW BELOW RULES (STRICTLY USE `regimen_breakout` column to answer):{
+  a.DEFINITION:
+    - CDK MONO: If regimen contains "CDK" without any "+" symbol
+    - CDK COMBO: If regimen contains "CDK" with any "+" symbol
+
+  b.STEP 1: SEARCH IN `regimen_breakout` COLUMN : 
+        - Use the `regimen_breakout` column to identify CDK treatments
+
+    STEP 2: FILTERING LOGIC : 
+      - For CDK MONO:
+        - WHERE `regimen_breakout` ILIKE '%CDK%' AND regimen_breakout NOT ILIKE '%+%'
+        - OR WHERE `regimen_breakout` = 'CDK MONO'
+      - For CDK COMBO:
+        - WHERE `regimen_breakout` ILIKE '%CDK%' AND regimen_breakout ILIKE '%+%'
+
+    STEP 3: SAMPLE `regimen_breakout` VALUES : 
+      - CDK COMBO examples: TRODELVY + CDK, CDK + OTHER HORMONAL, TRUQAP + CDK, CDK + FULVESTRANT, CDK + XELODA, CDK + HALAVEN, ITOVEBI + CDK, DATROWAY + CDK, CDK + OTHER CHEMO, CDK + VINORELBINE, ENHERTU + CDK, CDK + ORSERDU, CDK + TAXANE, CDK + GEM, CDK + OTHER TARGETED
+      - CDK MONO examples: CDK MONO
+
+    STEP 4: QUERY STRUCTURE
+      - Filter data using the `regimen_breakout` column
+      - Apply appropriate logic based on presence or absence of "+" symbol
+      - Group results by CDK MONO vs CDK COMBO categories.}
+
+Instructions for Surgery/BC Surgery Code Search:
+  - SEARCH ONLY IN `procedure_code` COLUMN WHENEVER USER MENTION SURGERY OR BC SURGERY CODES IN THE QUERY. 
+  - USE the `Monthly_Adjusted_Count` to count the patients.
+  - When the user asks about surgery codes or BDC surgery codes, search for the following codes in the `procedure_code` column:["00402", "00404", "00854", "00857", "08522", "08523", "08541", "08542", "08543", "08544","08545", "08546", "08547", "08548", "08553", "08554", "08558", "08570", "08579", "08587","08593", "08594", "0H0T3ZZ", "0H0U3ZZ", "0H0V3ZZ", "0H5T3ZZ", "0H5U3ZZ", "0H5V3ZZ","0H9T3ZX", "0H9T3ZZ", "0H9U3ZX", "0H9U3ZZ", "0H9V3ZX", "0H9V3ZZ", "0HBT3ZX", "0HBT3ZZ", "0HBU3ZX", "0HBU3ZZ", "0HBV3ZX", "0HBV3ZZ", "0HBY3ZZ", "0HQT3ZZ", "0HQU3ZZ", "0HQV3ZZ", "0HQY3ZZ", "0HTT0ZZ", "0HTU0ZZ", "0HTV0ZZ", "0HTY0ZZ", "11920", "11921", "11922", "11970","11971", "15271", "15272", "15277", "19020", "19111", "19112", "19113", "19114", "19115", "19116", "19117", "19118", "19119", "19120", "19121", "19122", "19123", "19124", "19125", "19126", "19140", "19160", "19162", "19180", "19182", "19200", "19220", "19240", "19294", "19297", "19300", "19301", "19302", "19303", "19304", "19305", "19306", "19307", "19316", "19318", "19324", "19325", "19328", "19330", "19340", "19342", "19350", "19355", "19357", "19361", "19364", "19364", "19366", "19367", "19367", "19368", "19368", "19369", "19370", "19370", "19371", "19371", "19380", "19396", "19396", "38500", "38510", "38525", "38530", "38531", "38550", "38745", "38900", "G9708", "L8600", "S2066", "S2067", "S2068"]
+
+WHEN USER ASKS/MENTIONS ABOUT NEO-ADJUVANT OR ADJUVANT REGIMENS/CHEMO COMBINATIONS (STRICTLY USE `regimen_name` column to answer):{
+
+  a. DEFINITION:
+     - NEO-ADJUVANT REGIMENS: Chemotherapy given BEFORE surgery to shrink tumors
+     - ADJUVANT REGIMENS: Chemotherapy given AFTER surgery to prevent recurrence
+     - Both categories include NCCN preferred chemotherapy combinations
+
+  b. STEP 1: UNDERSTAND THE REGIMEN CATEGORIES
+     
+     NEO-ADJUVANT REGIMENS INCLUDE:
+     - ACT (Anthracycline + Cyclophosphamide + Taxane)
+     - TC (Taxane + Cyclophosphamide)
+     - AC (Anthracycline + Cyclophosphamide)
+     - AC+T+Platinum (Anthracycline + Cyclophosphamide + Taxane + Platinum)
+     - CMF (Cyclophosphamide + Methotrexate + Fluorouracil)
+     - TAC (Taxane + Anthracycline + Cyclophosphamide)
+     - Paclitaxel+Carboplatin (Taxane + Platinum)
+     - Keytruda + Chemo (Pembrolizumab/Keytruda with chemotherapy)
+
+     ADJUVANT REGIMENS INCLUDE (All Neo-Adjuvant regimens PLUS):
+     - Capecitabine (alone or in combination)
+     - Anthracycline (broader - any regimen with anthracyclines)
+     - Taxane and Platinum agents (any combination)
+     - Keytruda Mono (Pembrolizumab/Keytruda without chemotherapy)
+
+  c. STEP 2: SEARCH IN `regimen_name` COLUMN
+     - Use the `regimen_name` column which contains comma-separated drug combinations
+     - Apply LIKE '%drug_name%' pattern matching for each drug component
+
+  d. STEP 3: DRUG NAME MAPPING FOR PATTERN MATCHING
+     
+     ANTHRACYCLINES:
+     - DOXORUBICIN or EPIRUBICIN
+     
+     TAXANES:
+     - PACLITAXEL or DOCETAXEL
+     
+     PLATINUM AGENTS:
+     - CARBOPLATIN, CISPLATIN, or OXALIPLATIN
+     
+     CYCLOPHOSPHAMIDE:
+     - CYCLOPHOSPHAMIDE
+     
+     OTHER KEY DRUGS:
+     - METHOTREXATE
+     - FLUOROURACIL
+     - CAPECITABINE
+     
+     IMMUNOTHERAPY:
+     - PEMBROLIZUMAB or KEYTRUDA (treat as same drug)
+
+  e. STEP 4: NEO-ADJUVANT FILTERING LOGIC
+     
+     WHERE (
+         -- ACT: Anthracycline + Cyclophosphamide + Taxane
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+         )
+         OR
+         -- TC: Cyclophosphamide + Taxane (WITHOUT Anthracycline)
+         (
+             regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+         )
+         OR
+         -- AC: Anthracycline + Cyclophosphamide (WITHOUT Taxane)
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+         )
+         OR
+         -- AC+T+Platinum: Anthracycline + Cyclophosphamide + Taxane + Platinum
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+             AND regimen_name LIKE '%CARBOPLATIN%'
+         )
+         OR
+         -- CMF: Cyclophosphamide + Methotrexate + Fluorouracil
+         (
+             regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND regimen_name LIKE '%METHOTREXATE%'
+             AND regimen_name LIKE '%FLUOROURACIL%'
+         )
+         OR
+         -- TAC: Taxane + Anthracycline + Cyclophosphamide (same as ACT)
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+         )
+         OR
+         -- Paclitaxel+Carboplatin (T+Platinum)
+         (
+             (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+             AND regimen_name LIKE '%CARBOPLATIN%'
+         )
+         OR
+         -- Keytruda + Chemo (Pembrolizumab/Keytruda WITH any chemotherapy)
+         (
+             (regimen_name LIKE '%PEMBROLIZUMAB%' OR regimen_name LIKE '%KEYTRUDA%')
+             AND (
+                 regimen_name LIKE '%CHEMO%'
+                 OR regimen_name LIKE '%PACLITAXEL%' 
+                 OR regimen_name LIKE '%DOCETAXEL%'
+                 OR regimen_name LIKE '%CARBOPLATIN%'
+                 OR regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+                 OR regimen_name LIKE '%DOXORUBICIN%'
+                 OR regimen_name LIKE '%EPIRUBICIN%'
+                 OR regimen_name LIKE '%CAPECITABINE%'
+                 OR regimen_name LIKE '%METHOTREXATE%'
+                 OR regimen_name LIKE '%FLUOROURACIL%'
+             )
+         )
+     )
+
+  f. STEP 5: ADJUVANT FILTERING LOGIC
+     
+     WHERE (
+         -- ACT: Anthracycline + Cyclophosphamide + Taxane
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+         )
+         OR
+         -- TC: Cyclophosphamide + Taxane (WITHOUT Anthracycline)
+         (
+             regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+         )
+         OR
+         -- AC: Anthracycline + Cyclophosphamide (WITHOUT Taxane)
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+         )
+         OR
+         -- AC+T+Platinum: Anthracycline + Cyclophosphamide + Taxane + Platinum
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+             AND regimen_name LIKE '%CARBOPLATIN%'
+         )
+         OR
+         -- CMF: Cyclophosphamide + Methotrexate + Fluorouracil
+         (
+             regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND regimen_name LIKE '%METHOTREXATE%'
+             AND regimen_name LIKE '%FLUOROURACIL%'
+         )
+         OR
+         -- TAC: Taxane + Anthracycline + Cyclophosphamide
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+             AND regimen_name LIKE '%CYCLOPHOSPHAMIDE%'
+             AND (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+         )
+         OR
+         -- Capecitabine (ANY regimen containing Capecitabine)
+         (
+             regimen_name LIKE '%CAPECITABINE%'
+         )
+         OR
+         -- Anthracycline (ANY regimen containing Anthracycline - broader definition)
+         (
+             (regimen_name LIKE '%DOXORUBICIN%' OR regimen_name LIKE '%EPIRUBICIN%')
+         )
+         OR
+         -- Taxane and Platinum agents (ANY combination with both)
+         (
+             (regimen_name LIKE '%PACLITAXEL%' OR regimen_name LIKE '%DOCETAXEL%')
+             AND regimen_name LIKE '%CARBOPLATIN%'
+         )
+         OR
+         -- Keytruda Mono (Pembrolizumab/Keytruda WITHOUT any chemotherapy)
+         (
+             (
+                 regimen_name = 'PEMBROLIZUMAB'
+                 OR regimen_name = 'KEYTRUDA'
+             )
+             OR (
+                 (regimen_name LIKE '%PEMBROLIZUMAB%' OR regimen_name LIKE '%KEYTRUDA%')
+                 AND regimen_name NOT LIKE '%CHEMO%'
+                 AND regimen_name NOT LIKE '%PACLITAXEL%'
+                 AND regimen_name NOT LIKE '%DOCETAXEL%'
+                 AND regimen_name NOT LIKE '%CARBOPLATIN%'
+                 AND regimen_name NOT LIKE '%CYCLOPHOSPHAMIDE%'
+                 AND regimen_name NOT LIKE '%DOXORUBICIN%'
+                 AND regimen_name NOT LIKE '%EPIRUBICIN%'
+                 AND regimen_name NOT LIKE '%CAPECITABINE%'
+                 AND regimen_name NOT LIKE '%METHOTREXATE%'
+                 AND regimen_name NOT LIKE '%FLUOROURACIL%'
+             )
+         )
+     )
+
+  g. STEP 6: PATIENT COUNTING METHODOLOGY
+     - Use `Monthly_Adjusted_Count` column for counting patients
+     - Use SUM(Monthly_Adjusted_Count) for total patient counts
+     - Group by regimen_category (Neo-Adjuvant vs Adjuvant) when needed
+
+  h. STEP 7: QUERY STRUCTURE GUIDELINES
+     
+     BASIC STRUCTURE:
+     - Create separate CTEs for Neo-Adjuvant and Adjuvant patients
+     - Combine results using UNION ALL when both categories are requested
+     - Always group by patient_id and regimen_name first, then aggregate
+     
+     EXAMPLE CTE STRUCTURE:
+     WITH neo_adjuvant_patients AS (
+         SELECT 
+             regimen_name,
+             'Neo-Adjuvant' AS regimen_category,
+             SUM(Monthly_Adjusted_Count) AS patient_count
+         FROM table_name
+         WHERE [Neo-Adjuvant conditions]
+         GROUP BY patient_id, regimen_name
+     ),
+     adjuvant_patients AS (
+         SELECT 
+             regimen_name,
+             'Adjuvant' AS regimen_category,
+             SUM(Monthly_Adjusted_Count) AS patient_count
+         FROM table_name
+         WHERE [Adjuvant conditions]
+         GROUP BY patient_id, regimen_name
+     )
+
+  i. STEP 8: GROUPING AND PRESENTATION STRUCTURE
+     
+     - Present data as the user requests (by regimen type, indication, time period, etc.)
+     - ALWAYS keep Neo-Adjuvant and Adjuvant separate with clear labels
+
+  j. STEP 9: ADDITIONAL FILTERS TO CONSIDER
+     
+     When applicable, combine Neo-Adjuvant/Adjuvant filters with:
+     - indication: Filter by 'TNBC' or 'HR+/HER2-'
+     - Line_of_Therapy_LOT: Filter by treatment line (1L, 2L, etc.)
+     - Year: Filter by specific years (2022, 2023, 2024)
+     - Year_Month: Filter for specific time periods (YYYYMM format)
+     - NPI_HCP_tier: Filter by healthcare provider tier
+
+  k. STEP 10: SAMPLE `regimen_name` VALUES THAT MATCH
+     
+     NEO-ADJUVANT EXAMPLES:
+     - DOCETAXEL,CYCLOPHOSPHAMIDE,DOXORUBICIN (ACT)
+     - PACLITAXEL,CYCLOPHOSPHAMIDE (TC)
+     - CYCLOPHOSPHAMIDE,DOXORUBICIN (AC)
+     - PACLITAXEL,CARBOPLATIN (T+Platinum)
+     - PACLITAXEL,CYCLOPHOSPHAMIDE,PEMBROLIZUMAB (Keytruda + Chemo)
+     - PACLITAXEL,DOCETAXEL,FLUOROURACIL,METHOTREXATE,CYCLOPHOSPHAMIDE (CMF)
+     
+     ADJUVANT EXAMPLES (in addition to all Neo-Adjuvant):
+     - CAPECITABINE (Capecitabine alone)
+     - CAPECITABINE,DOCETAXEL (Capecitabine combo)
+     - DOXORUBICIN HCL (Anthracycline)
+     - VINORELBINE,CARBOPLATIN (Taxane + Platinum)
+     - PEMBROLIZUMAB or KEYTRUDA (Keytruda Mono - only if no other chemo drugs)
+
+  m. COMMON USER QUERIES AND RESPONSES:
+     
+     "How many patients are on neo-adjuvant regimens?"
+     → Filter using Neo-Adjuvant WHERE clause, sum Monthly_Adjusted_Count
+     
+     "Show me adjuvant regimen patient counts"
+     → Filter using Adjuvant WHERE clause, sum Monthly_Adjusted_Count
+     
+     "Compare neo-adjuvant vs adjuvant patients"
+     → Use both CTEs, combine with UNION ALL, group by regimen_category
+     
+     "What are the top neo-adjuvant combinations?"
+     → Filter Neo-Adjuvant, group by regimen_name, order by patient count DESC
+     
+     "How many patients are on NCCN preferred chemo combinations?"
+     → Include BOTH Neo-Adjuvant and Adjuvant filters, combine results
+     
+     "Show me ACT regimen patients"
+     → Filter for: Anthracycline + Cyclophosphamide + Taxane combination
+
+  n. CRITICAL RULES:
+     - NEVER use columns other than `regimen_name` for identifying Neo-Adjuvant/Adjuvant
+     - ALWAYS use `Monthly_Adjusted_Count` for patient counting
+     - NEVER merge Neo-Adjuvant and Adjuvant into one category without clear separation
+     - ALWAYS use LIKE with wildcards (%) for pattern matching
+     - ALWAYS apply NOT LIKE conditions when excluding drugs from combinations
+}
+
+WHEN USER ASKS/MENTIONS ABOUT EARLY STAGE OR LATE STAGE PATIENTS (STRICTLY USE `Line_of_Therapy_LOT` column to answer):{
+
+  a. DEFINITION:
+     - EARLY STAGE PATIENTS: Patients with Line_of_Therapy_LOT <= 0
+     - LATE STAGE PATIENTS: Patients with Line_of_Therapy_LOT > 0
+     - STRICTLY NEVER USE THE LATEST MONTH DATA UNLESS USER SPECIFY IF USER DO NOT SPECIFY ANY TIME PERIOD THEN ANSWER FROM THE WHOLE DATA ALWAYS.
+
+  b. STEP 1: FILTERING LOGIC
+     
+     FOR EARLY STAGE PATIENTS:
+     WHERE Line_of_Therapy_LOT <= 0
+     
+     FOR LATE STAGE PATIENTS:
+     WHERE Line_of_Therapy_LOT > 0
+
+  c. STEP 2: PATIENT COUNTING METHODOLOGY
+     - Use `Monthly_Adjusted_Count` column for counting patients
+     - Use SUM(Monthly_Adjusted_Count) for total adjusted patient counts
+     - Do NOT use COUNT(DISTINCT patient_id) unless specifically requested
+
+  d. STEP 3: QUERY STRUCTURE EXAMPLES
+     
+     EXAMPLE 1: Count early stage patients on specific drug
+     SELECT 
+         SUM(Monthly_Adjusted_Count) AS total_adjusted_count
+     FROM table_name
+     WHERE regimen_name LIKE '%ABEMACICLIB%'
+       AND Line_of_Therapy_LOT <= 0;
+     
+     EXAMPLE 2: Compare early vs late stage for multiple drugs
+     SELECT 
+         CASE 
+             WHEN Line_of_Therapy_LOT <= 0 THEN 'Early Stage'
+             WHEN Line_of_Therapy_LOT > 0 THEN 'Late Stage'
+         END AS patient_stage,
+         CASE 
+             WHEN regimen_name LIKE '%ABEMACICLIB%' THEN 'ABEMACICLIB'
+             WHEN regimen_name LIKE '%RIBOCICLIB%' THEN 'RIBOCICLIB'
+         END AS drug_name,
+         SUM(Monthly_Adjusted_Count) AS total_adjusted_count
+     FROM table_name
+     WHERE regimen_name LIKE '%ABEMACICLIB%' 
+        OR regimen_name LIKE '%RIBOCICLIB%'
+     GROUP BY patient_stage, drug_name;
+     
+     EXAMPLE 3: Early stage patients on multiple specific drugs
+     SELECT 
+         CASE 
+             WHEN regimen_name LIKE '%ABEMACICLIB%' THEN 'ABEMACICLIB'
+             WHEN regimen_name LIKE '%RIBOCICLIB%' THEN 'RIBOCICLIB'
+         END AS drug_name,
+         SUM(Monthly_Adjusted_Count) AS total_adjusted_count
+     FROM table_name
+     WHERE (regimen_name LIKE '%ABEMACICLIB%' OR regimen_name LIKE '%RIBOCICLIB%')
+       AND Line_of_Therapy_LOT <= 0
+     GROUP BY drug_name;
+
+  e. COMMON USER QUERIES AND RESPONSES:
+     
+     "How many early stage patients are on [drug]?"
+     → Filter: regimen_name LIKE '%drug%' AND Line_of_Therapy_LOT <= 0
+     
+     "Show me late stage patients on [drug]"
+     → Filter: regimen_name LIKE '%drug%' AND Line_of_Therapy_LOT > 0
+     
+     "Compare early vs late stage for [drug1] and [drug2]"
+     → Use CASE statements to categorize stage and drugs, filter both drugs, group by stage and drug_name
+     
+     "How many patients on [drug] are tagged as early stage?"
+     → Filter: regimen_name LIKE '%drug%' AND Line_of_Therapy_LOT <= 0
+     
+     "What is the distribution of patients across treatment lines?"
+     → Group by Line_of_Therapy_LOT, order by LOT
+
+  f. CRITICAL RULES:
+     - ALWAYS use `regimen_name` column for drug filtering (NOT product_name)
+     - ALWAYS use `Line_of_Therapy_LOT` column for stage identification
+     - ALWAYS use `Monthly_Adjusted_Count` for patient counting
+}
+
+General Share Calculation: 
+- After filtering and aggregating data, always sort by 'Year_Month' to ensure time series graphs plot in the correct order.
+To calculate shares for R3M (rolling 3 months),drug-specific shares,NPS shares, TPS shares, and adopter/dabbler/non-user segments, use the following approach:
+ - Numerator: Sum the Monthly_Adjusted_Count for the specified drug. 
+ - Denominator: Sum Monthly_Adjusted_Count across all drugs.
+- Always sort the Denominator and Numerator values by Year_Month.
+- Filtering:
+  - Example: For Trodelvy’s new patient share in Line of Therapy (LOT) 1, filter the numerator for Trodelvy, LOT 1, and new patients. 
+  Filter the denominator for new patients in LOT 1 only.
+
+R3M Share Calculation:
+If the request mentions "rolling 3 months," "last 3 months," or similar, calculate a rolling three-month share for each month in the period.
+Interpreting R3M or Rolling 3 months Share Requests:
+Steps for calculating rolling three-month shares:(execute step by step using the run_python_code)
+- Manually calculate the rolling 3-month sums by first converting the data to a pandas dataframe, which will allow for the rolling operation without partitioning issues
+
+Steps to Analyze R3M Shares Using Databricks SQL - 
+
+Data Range Requirements
+- For 3-month rolling (R3M) calculations, ensure your data covers the required time range. When calculating R3M shares for any period, include two months prior to your analysis start date.
+Example: For R3M calculations starting January 2024, include data from November 2023 onward.
+
+Query Structure Guidelines 
+- Separate Numerator and Denominator Queries
+1. Base CTE for Common Filters:
+WITH base_data AS (
+  SELECT *
+  FROM claims_data
+  WHERE indication = '[INDICATION]'
+    AND `Line of Therapy(LOT)` = '[LOT]'
+    AND new_patient_flag = '1'
+  ORDER BY Year_Month
+)
+
+2. Denominator CTE (All Regimens):
+, denominator_monthly AS (
+  SELECT 
+    Year_Month,
+    SUM(Monthly_Adjusted_Count) AS total_count
+  FROM base_data
+  GROUP BY Year_Month
+  ORDER BY Year_Month
+)
+
+3. Numerator CTE (Specific Regimen):
+, numerator_monthly AS (
+  SELECT 
+    Year_Month,
+    SUM(Monthly_Adjusted_Count) AS regimen_count
+  FROM base_data
+  WHERE regimen_grouped_name LIKE '%[REGIMEN_NAME]%'
+  GROUP BY Year_Month
+  ORDER BY Year_Month
+)
+
+- Note - Always execute the denominator filters first and then the numerator filters
+
+ROLLING 3 MONTH CALCULATIONS - 
+
+, denominator_r3m AS (
+  SELECT
+    d1.Year_Month,
+    SUM(d2.total_count) AS r3m_total_count
+  FROM denominator_monthly d1
+  JOIN denominator_monthly d2 
+    ON d2.Year_Month <= d1.Year_Month 
+    AND d2.Year_Month >= DATE_FORMAT(ADD_MONTHS(TO_DATE(CAST(d1.Year_Month AS STRING), 'yyyyMM'), -2), 'yyyyMM')
+  GROUP BY d1.Year_Month
+  HAVING COUNT(*) = 3  -- Ensure we have exactly 3 months
+  ORDER BY d1.Year_Month
+)
+
+, numerator_r3m AS (
+  SELECT
+    n1.Year_Month,
+    SUM(n2.regimen_count) AS r3m_regimen_count
+  FROM numerator_monthly n1
+  JOIN numerator_monthly n2 
+    ON n2.Year_Month <= n1.Year_Month 
+    AND n2.Year_Month >= DATE_FORMAT(ADD_MONTHS(TO_DATE(CAST(n1.Year_Month AS STRING), 'yyyyMM'), -2), 'yyyyMM')
+  GROUP BY n1.Year_Month
+  HAVING COUNT(*) = 3  -- Ensure we have exactly 3 months
+  ORDER BY n1.Year_Month
+)
+
+Final R3M Share Calculation - 
+
+SELECT
+  r.Year_Month,
+  r.r3m_regimen_count,
+  d.r3m_total_count,
+  (r.r3m_regimen_count / d.r3m_total_count) * 100 AS r3m_share_percentage
+FROM numerator_r3m r
+JOIN denominator_r3m d ON r.Year_Month = d.Year_Month
+WHERE SUBSTRING(r.Year_Month, 1, 4) = '[REQUESTED_YEAR]'  -- Filter for requested year
+ORDER BY r.Year_Month
+
+-  Present the R3M shares a percentage or decimal for each month and only include the months of the year specified by the user in the final output.
+
+-Rules for Calculating Dabbler/Adopter/Non-user Shares:
+  Filter for new patients.
+  Calculate the share of each drug prescribed by each HCP to identify them as an Adopter, Dabbler, or Non-user:
+     -Adopter: Prescribes Trodelvy for 40% or more of their new patients.
+     -Dabbler: Prescribes Trodelvy for more than 0% but less than 40% of their new patients.
+     -Non-user: Does not prescribe Trodelvy for any of their new patients.
+
+-HCP/Patient Counts:
+Simply count the number of HCPs or patients as required.
+-If both shares and counts are requested, calculate each separately and combine as specified.
+
+-Regimens by Indication:
+  - HR+/HER2- : OTHER HORMONAL, CDK, OTHER TARGETED, FULVESTRANT BASED, ORSERDU BASED, OTHER CHEMO, TAXANE BASED, TRODELVY BASED, XELODA BASED, HALAVEN BASED, ENHERTU BASED, GEMZAR BASED, VINORELBINE BASED.
+  - TNBC : TAXANE BASED, TRODELVY BASED, XELODA BASED, HALAVEN BASED, ENHERTU BASED, GEMZAR BASED, VINORELBINE BASED, PLATINUM BASED, PD-1/PD-L1 BASED, ANTHRACYCLINE BASED, PARP BASED, OTHER SINGLE CHEMO, OTHER COMBINATION CHEMO.
+- Use the Year_Month column (formatted as YYYYMM) to extract year and quarter data for yearly or quarterly analyses.
+
+Rules for Calculating Dabbler/Adopter/Non-user Shares:
+
+  Filter for new patients.
+  Calculate the share of each drug prescribed by each HCP to identify them as an Adopter, Dabbler, or Non-user:
+     -Adopter: Prescribes Trodelvy for 40% or more of their new patients.
+     -Dabbler: Prescribes Trodelvy for more than 0% but less than 40% of their new patients.
+     -Non-user: Does not prescribe Trodelvy for any of their new patients.
+
+-HCP/Patient Counts:
+Simply count the number of HCPs or patients as required.
+-If both shares and counts are requested, calculate each separately and combine as specified.
+
+-Regimens by Indication:
+  - HR+/HER2- : OTHER HORMONAL, CDK, OTHER TARGETED, FULVESTRANT BASED, ORSERDU BASED, OTHER CHEMO, TAXANE BASED, TRODELVY BASED, XELODA BASED, HALAVEN BASED, ENHERTU BASED, GEMZAR BASED, VINORELBINE BASED.
+  - TNBC : TAXANE BASED, TRODELVY BASED, XELODA BASED, HALAVEN BASED, ENHERTU BASED, GEMZAR BASED, VINORELBINE BASED, PLATINUM BASED, PD-1/PD-L1 BASED, ANTHRACYCLINE BASED, PARP BASED, OTHER SINGLE CHEMO, OTHER COMBINATION CHEMO.
+- Use the Year_Month column (formatted as YYYYMM) to extract year and quarter data for yearly or quarterly analyses.

@@ -1,0 +1,71 @@
+{
+    "ship_to_poc_id": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "ship_to_poc_nm": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "ship_to_poc_zip": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "ship_to_dea_hin_cust_id": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "shipt_dt": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "qty_sold_pu": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "ship_to_poc_cot": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "ship_to_acnt_eid": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "child_name": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "ship_to_acnt_zip": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "linked_id": {
+      "Tro_sales": "Links to child_account or child_hospital",
+      "DDD_sales": "Links to child_account or child_hospital"
+    },
+    "parent_eid": { "Tro_sales": "available", "DDD_sales": "available" },
+    "parent_name": {
+      "Tro_sales": "Account names like ['BAPTIST HEALTHCARE SYSTEM, INC', etc.]",
+      "DDD_sales": "Account names like ['BAPTIST HEALTHCARE SYSTEM, INC', etc.]"
+    },
+    "parent_st": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "zip": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "geo_id": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "terr_id": { "Tro_sales": "available", "DDD_sales": "available" },
+    "terr_nm": { "Tro_sales": "available", "DDD_sales": "available" },
+    "area_id": { "Tro_sales": "available", "DDD_sales": "available" },
+    "area_nm": { "Tro_sales": "available", "DDD_sales": "available" },
+    "regn_id": { "Tro_sales": "available", "DDD_sales": "available" },
+    "regn_nm": {
+      "Tro_sales": "Region Name. Always use this column to find the region name.",
+      "DDD_sales": "Region name. Always use this column to find the region name."
+    },
+    "parent_zip": { "Tro_sales": "available", "DDD_sales": "available" },
+    "parent_regn_nm": { "Tro_sales": "available", "DDD_sales": "available" },
+    "parent_area_nm": { "Tro_sales": "available", "DDD_sales": "available" },
+    "flag_340b": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "early_adopter": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "week_end_date": { "Tro_sales": "available", "DDD_sales": "available" },
+    "month_year": { "Tro_sales": "available", "DDD_sales": "Not available" },
+    "child_account_type": {
+      "Tro_sales": "Community, Academic, Unknown",
+      "DDD_sales": "Community, Academic, Unknown"
+    },
+    "linked_id_account_type": { "Tro_sales": "available", "DDD_sales": "available" },
+    "top_parent_account_type": {
+      "Tro_sales": "IDN/Hospital, Community, Academic, Unknown",
+      "DDD_sales": "IDN/Hospital, Community, Academic, Unknown"
+    },
+    "top_parent_flag": { "Tro_sales": "available", "DDD_sales": "available" },
+    "parent_bc_segment": {
+      "Tro_sales": "Low, High, Medium, Unknown",
+      "DDD_sales": "Low, High, Medium, Unknown"
+    },
+    "kad_flag": {
+      "Tro_sales": "Y, N",
+      "DDD_sales": "Y, N"
+    },
+    "linkedid_bc_segment": {
+      "Tro_sales": "Low, High, Medium, Unknown",
+      "DDD_sales": "Low, High, Medium, Unknown"
+    },
+    "top_80_flag": { "Tro_sales": "available", "DDD_sales": "available" },
+    "kad_name": { "Tro_sales": "available", "DDD_sales": "available" },
+    "kad_region": { "Tro_sales": "available", "DDD_sales": "available" },
+    "kad_id": { "Tro_sales": "available", "DDD_sales": "available" },
+    "kad_accnt_typ": { "Tro_sales": "available", "DDD_sales": "available" },
+    "rebated_flag": { "Tro_sales": "available", "DDD_sales": "available" },
+    "drug_name": { "Tro_sales": "available", "DDD_sales": "available" },
+    "trx_cnt": { "Tro_sales": "Not available", "DDD_sales": "available" }
+  }
+  

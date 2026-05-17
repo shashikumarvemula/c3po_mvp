@@ -1,0 +1,148 @@
+/*remove build with chainlit*/
+/* .watermark.css-1705j0v {
+    display: none !important;
+} */
+
+/* Completely hide all content inside watermark */
+.watermark * {
+    display: none !important;
+}
+
+/* Hide the watermark link content */
+.watermark a {
+    visibility: hidden !important;
+}
+
+/* Custom watermark with dynamic theming */
+.watermark::after {
+    content: "Your Data's Best Friend C3P0 🤖 - AI Generated Content May Be Incorrect.";
+    white-space: pre-line; 
+    display: block !important;
+    text-align: center;
+    visibility: visible !important;
+    
+    /* Default to white for dark theme */
+    color: #ffffff !important;
+    font-size: 10px !important;
+}
+
+/* Force white color on dark backgrounds (your current theme) */
+body[style*="background"] .watermark::after,
+html[data-theme*="dark"] .watermark::after,
+[data-theme*="dark"] .watermark::after,
+.dark .watermark::after {
+    color: #ffffff !important;
+}
+
+/* Black color for light backgrounds */
+html[data-theme*="light"] .watermark::after,
+[data-theme*="light"] .watermark::after,
+.light .watermark::after,
+body[style*="background: white"] .watermark::after,
+body[style*="background: #fff"] .watermark::after {
+    color: #000000 !important;
+}
+
+/* Media query fallback */
+@media (prefers-color-scheme: dark) {
+    .watermark::after {
+        color: #ffffff !important;
+    }
+}
+
+@media (prefers-color-scheme: light) {
+    .watermark::after {
+        color: #000000 !important;
+    }
+}
+
+/* footer {
+    display: none !important;
+} */
+.button[data-state="closed"] {
+    display: none !important;
+}
+svg.lucide-copy {
+    display: none !important;
+}
+
+.text-xs.text-muted-foreground span {
+    display: none;
+}
+
+.text-xs.text-muted-foreground svg {
+    display: none;
+}
+
+/* .button[class*="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 text-muted-foreground"] {
+    border-color: red;
+    background-color: blanchedalmond;
+} */
+
+button[class*="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 text-muted-foreground"] {
+    /* background-color: #4F46E5 !important; Custom Background */
+    /* color: white !important; Text Color */
+    border-radius: 8px;
+    border-color: rgb(193, 182, 86);
+    font-weight: bold;
+    /* padding: 12px 24px; */
+    gap: 5px;
+    box-shadow: 0px 1px 2px rgba(155, 145, 132, 0.924);
+    transition: all 0.3s ease-in-out;
+}
+
+button[class*="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 text-muted-foreground"]:hover {
+    /* background-color: #ca38af !important; Hover Effect */
+    transform: scale(1.05);
+    box-shadow: 0px 6px 10px rgba(0, 0, 0, 0.08);
+}
+
+button[class*="inline-flex items-center justify-center gap-2 whitespace-nowrap text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover:bg-accent hover:text-accent-foreground h-9 rounded-md px-3 text-muted-foreground"]:active {
+    background-color: #817ea3 !important; /* Click Effect */
+    transform: scale(0.98);
+}
+
+button.h-9.w-9.text-muted-foreground:not([class*="hover:text-muted-foreground"]):not([class*="positive-feedback"]):not([class*="negative-feedback"]) 
+{    display: none !important;}
+
+button.h-9.px-3.text-muted-foreground 
+{   margin-right: 16px !important;   
+    margin-top: 5px !important;   
+    margin-bottom: 5px !important;}
+/* Remove margin from last button */
+button.h-9.px-3.text-muted-foreground:last-child 
+{   margin-right: 0 !important;    
+    margin-top: 5px !important;    
+    margin-bottom: 5px !important;}
+
+/* Hide scrollbars in Firefox */
+* {
+    scrollbar-width: none !important;
+}
+
+/* Hide scrollbars in IE and Edge */
+* {
+    -ms-overflow-style: none !important;
+}
+
+/* Hide scrollbars in Chrome, Safari, Opera */
+*::-webkit-scrollbar {
+    width: 0 !important;
+    height: 0 !important;
+    display: none !important;
+}
+
+/* Target any button with ID starting with "step-" */
+/* button[id^="step-"] span:first-child {
+    display: none !important;
+} */
+
+/* Target paragraphs that contain spans with "Code" */
+/* div[class*="ai-message"] p:has(span:contains("Code")) {
+    display: none !important;
+} */
+
+/* Target the entire flex container */
+/* div.ai-message div.flex.flex-col.flex-grow p {
+    display: none !important;
+} */

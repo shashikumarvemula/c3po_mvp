@@ -1,0 +1,10 @@
+{
+    "procedure_code": "HCPCS Code of the procedure. Use this column as foreign key to map to the Mx data table",
+    "procedure_description": "Description of the procedure performed",
+    "regimen": "Name of the drug. Use this when user asks for drug names contains Treatment regimens (CDK, DATROWAY, ENHERTU, FULVESTRANT, GEMZAR, HALAVEN, HER2 POSITIVE DRUGS, ITOVEBI, ORSERDU, OTHER CHEMO, OTHER HORMONAL, OTHER SINGLE CHEMO, OTHER TARGETED, PD-1/PD-L1 BASED, PLATINUM BASED, TAXANE, TRODELVY, VINORELBINE, XELODA)",
+    "brand_name": "Brand name",
+    "procedure_class": "Procedure class which is lower level classification compared to regimen",
+    "bc_market": "Flag indicating if the drug is a part of breast cancer market or not",
+    "tnbc_market": "Flag indicating if the drug is a part of TNBC market basket or not",
+    "hr+her2-_market": "Flag indicating if the drug is a part of HR+/HER2-/mHR market basket or not"
+}

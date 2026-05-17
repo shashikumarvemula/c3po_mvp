@@ -1,0 +1,70 @@
+[
+    {
+        "type": "function",
+        "function": {
+            "name": "run_hybrid_search",
+            "description": "Generates a precise OpenSearch query for healthcare professional opinion data. This function creates an optimized search query that uses the exact minimum number of filters needed (maximum 3 keyword filters) with proper syntax and structure. It follows mapping rules for author names, drug names, clinical trials, sentiment, diseases, and time periods. It includes semantic search (kNN embeddings) only when content analysis is needed for questions about opinions, summarization, or analysis. The function returns a properly formatted JSON search query with '_source': True (capital T) and appropriate filters based on the user's question.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "object",
+                        "description": "The OpenSearch query object with properly structured bool queries, must clauses, filters, and embedding vectors (when needed). The query should follow the structure: { 'query': { 'bool': { 'must': [...] } }, '_source': True, 'size': 50 }. Use kNN for semantic search only when necessary for analyzing post content. Filters should match appropriate columns (Author, Drugs present in the Post, Clinical Trials present in the Post, etc.)."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "python_after_sql",
+            "description": "CRITICAL: This function handles ALL Python code for visualization and complex filtering. The complete Python code must be passed ONLY in the 'query' parameter. NEVER include any Python code in your conversational response. After calling this function, only describe the visualization result in plain English without showing any code.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The COMPLETE Python code for visualization. ALL imports must be included. This is the ONLY place where Python code should appear - never in conversational responses or summaries."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "insights_response",
+            "description": "This function is all about to providing insights. It is must used after completing the visualization part. You must call this function to get data to provide rich insights. Function should be called if mentioned in the system prompt else leave it",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Function call to get data and provide insights"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "text_processor",
+            "description": "This function analyzes and processes free-form text data to extract structured insights. It is designed to work with dataframes containing text columns and transforms unstructured text into meaningful, structured information for analysis.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text_column": {
+                        "type": "string",
+                        "description": "The name of the column containing the text data to be processed"
+                    }
+                },
+                "required": ["text_column"]
+            }
+        }
+    }
+]

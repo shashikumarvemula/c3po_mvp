@@ -1,0 +1,5 @@
+{
+    "list_of_bots" : ["Structured", "HIV_Structured", "Semi_Structured", "BYOD"],
+    "list_of_data_sources" : ["DataSource_Sales_867","DataSource_Sales_DDD","DataSource_Claims","DeckSource_Sales","DeckSource_Claims","DeckSource_Create"],
+    "deck_creation_classes" : ["Update_Onc_Sales_Deck", "Update_Onc_Claims_Deck","GeneratePPT"]
+}

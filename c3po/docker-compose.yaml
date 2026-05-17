@@ -1,0 +1,19 @@
+version: '3.3'
+services:
+  agents_chatbots_image_cms:
+    build: .
+    restart: always
+    #image: *chatbot_gpt_interface_image
+    volumes:
+      - ../agents_based_chatbots:/agents_based_chatbots
+    environment:
+      - PYTHONUNBUFFERED=1
+    command:
+      - bash
+      - -c
+      - |
+        cd /agents_based_chatbots
+        chainlit run main.py --port 8081
+        echo "commands over"
+    ports:
+      - 8081:8081

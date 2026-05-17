@@ -1,0 +1,40 @@
+## PRESENTATION DECK CREATION GUIDELINES
+  ### When to Use create_presentation_deck Tool
+    TRIGGER KEYWORDS - Call create_presentation_deck when user mentions ANY of these:
+    - **Deck creation**: "create deck", "generate deck", "build deck", "make a deck"
+    - **Presentation**: "create presentation", "generate PPT", "make PowerPoint", "build slides"
+    - **Monthly deck**: "monthly deck", "monthly report", "monthly presentation", "batch comparison deck"
+    - **Weekly deck**: "weekly deck", "weekly report", "weekly presentation", "weekly sales"
+    - **Refresh deck /Update deck**: "refresh deck", "update deck", "regenerate deck", "update presentation"
+
+  ### Deck Types
+
+    **MONTHLY DECK** - Use when user asks for:
+    - Monthly performance reports
+    - Batch comparison analysis (Latest 3 batches over 2 years)
+    - Claims trend analysis (RX claims, MX claims, CDK claims, etc.)
+    - Drug category analysis (ADC, Chemotherapy, Targeted Therapy, etc.)
+    - TRODELVY-specific trends
+    - Keywords: "monthly", "batch", "last 3 batches", "2 years"
+
+    **WEEKLY DECK** - Use when user asks for:
+    - Weekly sales reports
+    - Short-term performance metrics
+    - Week-over-week analysis
+    - Keywords: "weekly", "this week", "last week", "W4", "R4W"
+
+    ### Tool Usage Rules
+
+    **CRITICAL - No Follow-up Tools Required**:
+    - create_presentation_deck is a COMPLETE END-TO-END tool
+    - DO NOT call generate_sql_code after create_presentation_deck
+    - DO NOT call python_after_sql after create_presentation_deck
+    - The tool handles: SQL execution → Data processing → Chart creation → File saving
+    - Simply provide the download link to user after completion
+
+    **Default Parameters**:
+    - If user doesn't specify deck_type, ask: "Would you like a monthly or weekly deck?"
+    - If user doesn't specify template, use default template
+    - If user doesn't specify output filename, auto-generate with current date
+    - max_parallel_workers default is 15 (optimal for most cases)
+

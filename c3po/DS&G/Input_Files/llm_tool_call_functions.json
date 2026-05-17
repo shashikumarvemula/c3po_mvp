@@ -1,0 +1,134 @@
+[
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_date_ranges",
+            "description": "This function DOES NOT EXECUTE ANY PYTHON CODE. It is used STRICTLY after retrieving the latest date. You must pass that LATEST DATE (in '%Y-%m-%d' format) as the parameter to this function ONLY when the question is related to calculating date ranges for Q1TD, Q2TD, Q3TD, Q4TD, R13W, P13W, R4W, P4W, R12M, and P12M. This function will return a dictionary of the calculated date ranges. Do not embed any Python execution logic inside this function call or assume any random date. ALWAYS FIRST to determine the latest date from the dataset, and then use that date for calculating the date ranges here.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "A single date string in the format '%Y-%m-%d' representing the LATEST DATE for which we want to compute various date ranges."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_sql_code",
+            "description" : "Useful when you need to write and run the sql query for data analysis. This function is for executing the SQL query to figure out the LATEST DATE from the dataset only when the question pertains to date ranges related to Q1TD, Q2TD, Q3TD, Q4TD, R13W, P13W, R4W, P4W, R12M, and P12M. and perform other data manipulations to answer the user question. The code generated here must not contain any logic that involves directly calling calculate_date_ranges. Instead, you will first use this function to get the latest date, and then pass it as a parameter to the calculate_date_ranges function. The code to be run should be a stand-alone snippet and should not be dependent on the calculate_date_ranges function call unless the question specifically relates to these date ranges.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The SQL code you want to execute, for instance, to find the latest date from a dataset or to do advanced data analysis/processing. Must be a valid SQL Query, but should NOT include calculate_date_ranges or other conflicting logic, unless the question is related to the date ranges of Q1TD, Q2TD, Q3TD, Q4TD, R13W, P13W, R4W, P4W, R12M, and P12M."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "python_after_sql",
+            "description": "This function is for python handling after sql execution to handle visualization and complex filteration that can't handled by sql. Strictly use this function after the sql query is executed and the result is obtained. Never forget to use this function after the sql query is executed and the result is obtained.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "The Python code used after SQL handles visualizations and complex filtering that SQL cannot manage.when using this tool STRICTLY Always import the libraries required in the code.ALWAYS ASSUME THE LIBRARIES ARE NOT IMPORTED AND IMPORT AT THE BEGINING OF THE CODE."
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "insights_response",
+            "description": "This function is all about to providing insights. It is must used after completing the visualization part. You must call this function to get data to provide rich insights. Function should be called for every completion of visualization task.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Function call to get data and provide insights"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculate_nsp_capture_ratio",
+            "description": "Universal tool for NSP (National Sales Projection) analysis supporting 4 analysis types: (1) capture_ratio - time series capture ratio for any drug, (2) projection_oral - R12M projection factor for oral drugs (ABEMACICLIB, PALBOCICLIB, OLAPARIB, ANASTROZOLE, LETROZOLE, TAMOXIFEN, CAPECITABINE, etc.), (3) projection_iv - R12M projection factor for IV drugs with optional drug_name filtering (ADC: TRODELVY/ENHERTU/DATROWAY, CHEMO: HALAVEN/GEMZAR/TAXANE/OTHER CHEMO, FULVESTRANT: FULVESTRANT/ORSERDU), (4) projection_adc_trend - 6-month historical trend of ADC projection factor. This tool automatically classifies drugs and routes to correct SQL function. CRITICAL: After using this tool, ALWAYS use python_after_sql tool to save CSV, create visualizations, and provide insights. NEVER write custom SQL for NSP queries.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "analysis_type": {
+                        "type": "string",
+                        "enum": ["capture_ratio", "projection_oral", "projection_iv", "projection_adc_trend"],
+                        "description": "Type of NSP analysis. Use 'capture_ratio' for trends over time, monthly/quarterly/yearly data. Use 'projection_oral' for oral drug projection factors. Use 'projection_iv' for IV drug projection factors (supports drug_name parameter to filter specific category). Use 'projection_adc_trend' ONLY when user asks for TRODELVY/ADC projection factor TREND (keywords: 'trend', 'over time', 'last 6 months'). If user just asks 'TRODELVY projection factor' without 'trend', use 'projection_iv'."
+                    },
+                    "drug_name": {
+                        "type": "string",
+                        "description": "Drug name for analysis. REQUIRED for 'capture_ratio'. OPTIONAL for 'projection_iv' (if provided, returns only that drug's category factor; if null, returns all 3 categories). Not used for 'projection_oral' or 'projection_adc_trend'. Examples: 'ABEMACICLIB', 'PALBOCICLIB', 'TRODELVY', 'ENHERTU', 'HALAVEN', 'FULVESTRANT', 'OLAPARIB'. ORAL DRUGS: ABEMACICLIB, PALBOCICLIB, RIBOCICLIB, OLAPARIB, TALAZOPARIB, ALPELISIB, ITOVEBI, INAVOLISIB, TRUQAP, EVEROLIMUS, CAPIVASERTIB, ANASTROZOLE, LETROZOLE, EXEMESTANE, TAMOXIFEN, TOREMIFENE, CAPECITABINE, XELODA, CDK, OTHER TARGETED, OTHER HORMONAL. IV DRUGS - ADC: TRODELVY, ENHERTU, DATROWAY, SACITUZUMAB, TRASTUZUMAB. CHEMO: HALAVEN, ERIBULIN, GEMZAR, VINORELBINE, OTHER CHEMO, TAXANE, EPIRUBICIN, IXABEPILONE. FULVESTRANT: FULVESTRANT, ORSERDU."
+                    },
+                    "period_type": {
+                        "type": "string",
+                        "enum": ["MONTHLY", "QUARTERLY", "YEARLY"],
+                        "description": "Time aggregation period. ONLY used for 'capture_ratio'. Default: 'QUARTERLY'. Use 'MONTHLY' for month-by-month trends. Use 'YEARLY' for annual analysis."
+                    },
+                    "batch_month": {
+                        "type": "string",
+                        "description": "Batch month in YYYYMM format (e.g., '202509' for September 2025). ONLY used for 'capture_ratio'. If null or empty, uses latest available batch. Specify when user asks to compare specific months or previous batch."
+                    }
+                },
+                "required": ["analysis_type"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "create_presentation_deck",
+            "description": "Creates PowerPoint presentations (monthly or weekly decks) with charts based on predefined configurations. This tool reads chart specifications from an Excel file and generates a complete presentation with multiple charts in parallel for fast execution. Use this when user asks to: create/generate/refresh monthly deck, weekly deck, presentation, or PPT. CRITICAL: This tool handles the entire deck creation process - DO NOT use generate_sql_code or python_after_sql after this tool. The tool provides a download link when complete.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "deck_type": {
+                        "type": "string",
+                        "enum": ["monthly", "weekly"],
+                        "description": "Type of deck to create. Use 'monthly' for monthly performance decks with batch comparison charts (RX claims, MX claims, CDK, Oral Chemo, Hormonal, ADC, Chemotherapy, Targeted Therapy, TRODELVY trends). Use 'weekly' for weekly sales decks. Default: 'monthly'"
+                    },
+                    "template_name": {
+                        "type": "string",
+                        "description": "Name of the PowerPoint template file to use. If not specified, uses default template based on deck_type. Examples: 'monthly_template.pptx', 'weekly_template.pptx'. Default: 'template.pptx'"
+                    },
+                    "output_filename": {
+                        "type": "string",
+                        "description": "Name for the output PowerPoint file. If not specified, auto-generates based on deck_type and current date. Examples: 'monthly_deck_2025_11.pptx', 'weekly_sales_report.pptx'. Default: auto-generated"
+                    },
+                    "max_parallel_workers": {
+                        "type": "integer",
+                        "description": "Number of parallel workers for query execution (15-20). Higher values = faster execution but more database load. Default: 15. Use 20 for maximum speed if database supports it.",
+                        "minimum": 15,
+                        "maximum": 20
+                    }
+                },
+                "required": ["deck_type"]
+            }
+        }
+    }
+]
+

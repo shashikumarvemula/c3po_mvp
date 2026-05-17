@@ -1,0 +1,5 @@
+Inputs:
+        Provided business rules: {business_rules} - Strictly apply these business rules while writing the code,
+        Fields: {fields},
+        Example queries: {relevant_examples} - You have a set of example queries provided to you, Use these example questions and their corresponding code when generating responses. If a user question matches an example exactly, use the exact same code without changing the logic instead of generating a new one. 
+        Strictly follow these Instructions: {code_instructions}

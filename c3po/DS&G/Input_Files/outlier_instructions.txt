@@ -1,0 +1,644 @@
+OUTLIER QUESTION SQL GENERATION INSTRUCTIONS:
+
+1. OUTLIER DETECTION PROCESS (4-STEP APPROACH)
+
+    STEP 1: UNDERSTAND WHAT TO ANALYZE
+    -----------------------------------
+        Before writing SQL, identify:
+        A. DATA SCOPE:
+        - RX only? MX only? Both combined?
+        - Specific drugs/regimens or all breast cancer drugs?
+        - Time period: all data, specific months, latest batch?
+        - Which metric: claim counts, ratios, percentages, growth rates?
+
+        B. COMPARISON TYPE:
+        - Time-series (month-to-month, quarter-to-quarter)
+        - Batch-to-batch comparison
+        - Drug-to-drug comparison
+        - Ratio analysis (RX/MX, drug mix, etc.)
+
+    STEP 2: EXTRACT DATA WITH PROPER AGGREGATION
+    ---------------------------------------------
+        Write SQL query following all existing business rules:
+        - Apply all mandatory filters (cycle ID, claim type, date columns, etc.)
+        - Use appropriate LEFT JOINs with mapping tables
+        - Group data at the right level (monthly, by drug, by batch, etc.)
+        - Ensure minimum 6-10 data points for statistical analysis
+
+        TWO-MONTH LAG RULE (MANDATORY FOR ALL OUTLIER QUERIES):
+        CRITICAL: For ALL outlier detection queries (time-series, batch comparison, ratio analysis):
+        - ALWAYS exclude the last 2 months from the data being analyzed
+        - This ensures data completeness and prevents flagging incomplete months as outliers
+        - Apply this rule UNLESS the user explicitly mentions a specific date range or time period
+        - For RX: Use fill_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', MAX(fill_dt)), -2))
+        - For MX: Use svc_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', MAX(svc_dt)), -2))
+
+        CRITICAL FOR RX+MX COMBINED QUERIES:
+        WHEN USER ASKS about RX+MX combined data (e.g., "total claims", "RX+MX claims", "combined claims"):
+        
+        MANDATORY PROCEDURE:
+        1. Calculate RX claims SEPARATELY with RX's own latest pt_cycle_id
+        2. Calculate MX claims SEPARATELY with MX's own latest pt_cycle_id
+        3. Aggregate each by month independently
+        4. Apply 2-month lag to BOTH RX and MX independently
+        5. UNION ALL or SUM the results by matching months
+        6. NEVER use COALESCE or join RX and MX cycle IDs directly
+        
+        CORRECT SQL PATTERN FOR RX+MX MONTHLY AGGREGATION WITH 2-MONTH LAG:
+        ```sql
+        WITH         rx_monthly AS (
+            SELECT 
+                DATE_TRUNC('MONTH', rx.fill_dt) as claim_month,
+                COUNT(rx.clam_id) as rx_claims
+            FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed` rx
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_ndc_codes_mapped` ndc
+                ON rx.ndc11 = ndc.product_code
+            WHERE rx.pt_cycle_id = (SELECT MAX(pt_cycle_id) 
+                                    FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed`)
+                AND rx.clam_type = 'PD'
+                AND ndc.[drug_filter_column] = '[drug_value]'
+                AND ndc.product_code IS NOT NULL
+                AND rx.fill_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', 
+                    (SELECT MAX(fill_dt) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed` 
+                     WHERE pt_cycle_id = (SELECT MAX(pt_cycle_id) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed`))), -2))
+            GROUP BY claim_month
+        ),
+        mx_monthly AS (
+            SELECT 
+                DATE_TRUNC('MONTH', mx.svc_dt) as claim_month,
+                COUNT(mx.mx_clam_id) as mx_claims
+            FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed` mx
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_hcpcs_codes_mapped` hcpcs
+                ON mx.prcr_cd = hcpcs.procedure_code
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_ndc_codes_mapped` ndc
+                ON mx.ndc11 = ndc.product_code
+            WHERE mx.pt_cycle_id = (SELECT MAX(pt_cycle_id) 
+                                    FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed`)
+                AND (hcpcs.[drug_filter_column] = '[drug_value]' OR ndc.[drug_filter_column] = '[drug_value]')
+                AND (hcpcs.procedure_code IS NOT NULL OR ndc.product_code IS NOT NULL)
+                AND mx.svc_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', 
+                    (SELECT MAX(svc_dt) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed` 
+                     WHERE pt_cycle_id = (SELECT MAX(pt_cycle_id) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed`))), -2))
+            GROUP BY claim_month
+        ),
+        combined_monthly AS (
+            SELECT 
+                COALESCE(rx.claim_month, mx.claim_month) as claim_month,
+                COALESCE(rx.rx_claims, 0) + COALESCE(mx.mx_claims, 0) as total_claims
+            FROM rx_monthly rx
+            FULL OUTER JOIN mx_monthly mx ON rx.claim_month = mx.claim_month
+        )
+        -- Continue with outlier detection on combined_monthly
+        ```
+
+        CRITICAL FOR BATCH COMPARISON (RX+MX):
+        WHEN USER ASKS to compare batches for RX+MX combined:
+        
+        MANDATORY PROCEDURE:
+        1. Get latest 2 pt_cycle_ids from RX table separately
+        2. Get latest 2 pt_cycle_ids from MX table separately
+        3. For Batch 1 (Latest): Combine RX's latest cycle + MX's latest cycle by month
+        4. For Batch 2 (Previous): Combine RX's 2nd latest cycle + MX's 2nd latest cycle by month
+        5. EXCLUDE LAST 2 MONTHS from each batch to avoid incomplete data issues
+        6. Compare Batch 1 vs Batch 2 monthly totals
+        
+        BATCH NAMING CONVENTION:
+        - Batch 1 = Latest/Most recent batch
+        - Batch 2 = Previous/Second most recent batch
+        - Batch 3 = Third most recent batch (if applicable)
+        
+        CORRECT SQL PATTERN FOR BATCH COMPARISON (RX+MX):
+        ```sql
+        WITH rx_batches AS (
+            SELECT pt_cycle_id, 
+                   ROW_NUMBER() OVER (ORDER BY pt_cycle_id DESC) as batch_rank
+            FROM (SELECT DISTINCT pt_cycle_id 
+                  FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed`)
+        ),
+        mx_batches AS (
+            SELECT pt_cycle_id,
+                   ROW_NUMBER() OVER (ORDER BY pt_cycle_id DESC) as batch_rank
+            FROM (SELECT DISTINCT pt_cycle_id 
+                  FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed`)
+        ),
+        -- BATCH 1 (LATEST) WITH 2-MONTH LAG
+        rx_batch1 AS (
+            SELECT 
+                DATE_TRUNC('MONTH', rx.fill_dt) as claim_month,
+                COUNT(rx.clam_id) as rx_claims
+            FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed` rx
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_ndc_codes_mapped` ndc
+                ON rx.ndc11 = ndc.product_code
+            WHERE rx.pt_cycle_id = (SELECT pt_cycle_id FROM rx_batches WHERE batch_rank = 1)
+                AND rx.clam_type = 'PD'
+                AND ndc.[drug_filter_column] = '[drug_value]'
+                AND ndc.product_code IS NOT NULL
+                AND rx.fill_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', 
+                    (SELECT MAX(fill_dt) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed` 
+                     WHERE pt_cycle_id = (SELECT pt_cycle_id FROM rx_batches WHERE batch_rank = 1))), -2))
+            GROUP BY claim_month
+        ),
+        mx_batch1 AS (
+            SELECT 
+                DATE_TRUNC('MONTH', mx.svc_dt) as claim_month,
+                COUNT(mx.mx_clam_id) as mx_claims
+            FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed` mx
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_hcpcs_codes_mapped` hcpcs
+                ON mx.prcr_cd = hcpcs.procedure_code
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_ndc_codes_mapped` ndc
+                ON mx.ndc11 = ndc.product_code
+            WHERE mx.pt_cycle_id = (SELECT pt_cycle_id FROM mx_batches WHERE batch_rank = 1)
+                AND (hcpcs.[drug_filter_column] = '[drug_value]' OR ndc.[drug_filter_column] = '[drug_value]')
+                AND (hcpcs.procedure_code IS NOT NULL OR ndc.product_code IS NOT NULL)
+                AND mx.svc_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', 
+                    (SELECT MAX(svc_dt) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed` 
+                     WHERE pt_cycle_id = (SELECT pt_cycle_id FROM mx_batches WHERE batch_rank = 1))), -2))
+            GROUP BY claim_month
+        ),
+        batch1_combined AS (
+            SELECT 
+                COALESCE(rx.claim_month, mx.claim_month) as claim_month,
+                COALESCE(rx.rx_claims, 0) + COALESCE(mx.mx_claims, 0) as total_claims,
+                1 as batch_number
+            FROM rx_batch1 rx
+            FULL OUTER JOIN mx_batch1 mx ON rx.claim_month = mx.claim_month
+        ),
+        -- BATCH 2 (PREVIOUS) WITH 2-MONTH LAG
+        rx_batch2 AS (
+            SELECT 
+                DATE_TRUNC('MONTH', rx.fill_dt) as claim_month,
+                COUNT(rx.clam_id) as rx_claims
+            FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed` rx
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_ndc_codes_mapped` ndc
+                ON rx.ndc11 = ndc.product_code
+            WHERE rx.pt_cycle_id = (SELECT pt_cycle_id FROM rx_batches WHERE batch_rank = 2)
+                AND rx.clam_type = 'PD'
+                AND ndc.[drug_filter_column] = '[drug_value]'
+                AND ndc.product_code IS NOT NULL
+                AND rx.fill_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', 
+                    (SELECT MAX(fill_dt) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_rx_onc_hist_preprocessed` 
+                     WHERE pt_cycle_id = (SELECT pt_cycle_id FROM rx_batches WHERE batch_rank = 2))), -2))
+            GROUP BY claim_month
+        ),
+        mx_batch2 AS (
+            SELECT 
+                DATE_TRUNC('MONTH', mx.svc_dt) as claim_month,
+                COUNT(mx.mx_clam_id) as mx_claims
+            FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed` mx
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_hcpcs_codes_mapped` hcpcs
+                ON mx.prcr_cd = hcpcs.procedure_code
+            LEFT JOIN `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`breast_cancer_drugs_ndc_codes_mapped` ndc
+                ON mx.ndc11 = ndc.product_code
+            WHERE mx.pt_cycle_id = (SELECT pt_cycle_id FROM mx_batches WHERE batch_rank = 2)
+                AND (hcpcs.[drug_filter_column] = '[drug_value]' OR ndc.[drug_filter_column] = '[drug_value]')
+                AND (hcpcs.procedure_code IS NOT NULL OR ndc.product_code IS NOT NULL)
+                AND mx.svc_dt <= LAST_DAY(ADD_MONTHS(DATE_TRUNC('MONTH', 
+                    (SELECT MAX(svc_dt) FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`stg_iqvia_laad_mx_onc_hist_preprocessed` 
+                     WHERE pt_cycle_id = (SELECT pt_cycle_id FROM mx_batches WHERE batch_rank = 2))), -2))
+            GROUP BY claim_month
+        ),
+        batch2_combined AS (
+            SELECT 
+                COALESCE(rx.claim_month, mx.claim_month) as claim_month,
+                COALESCE(rx.rx_claims, 0) + COALESCE(mx.mx_claims, 0) as total_claims,
+                2 as batch_number
+            FROM rx_batch2 rx
+            FULL OUTER JOIN mx_batch2 mx ON rx.claim_month = mx.claim_month
+        )
+        -- Continue with comparison and outlier detection
+        ```
+
+        IMPORTANT: The SQL query structure remains the same as standard queries, 
+        but adds statistical calculations for outlier detection.
+
+    STEP 3: APPLY STATISTICAL OUTLIER DETECTION
+    --------------------------------------------
+        USE IQR METHOD FOR ALL OUTLIER DETECTION QUERIES:
+        
+        METHOD: IQR (INTERQUARTILE RANGE) ANALYSIS (Universal Method for All Outlier Detection)
+            WHEN USER ASKS about any type of outlier detection - trends, comparisons, ratios, or changes.
+
+            Formula: 
+            - Q1 = 25th percentile
+            - Q3 = 75th percentile  
+            - IQR = Q3 - Q1
+            - Lower Bound = Q1 - 1.5 × IQR
+            - Upper Bound = Q3 + 1.5 × IQR
+
+            SIMPLIFIED OUTLIER CLASSIFICATION:
+            Use ONLY three categories: 'Low Outlier', 'Normal', 'High Outlier'
+
+            SCENARIO A: TIME-SERIES OUTLIER DETECTION (Monthly/Quarterly Claims)
+            Apply IQR directly on claim counts or metric values.
+            REMEMBER: Data already has 2-month lag applied from STEP 2.
+
+            SQL Pattern:
+            ```sql
+            WITH data_aggregated AS (
+                -- Your standard aggregation query with all filters AND 2-MONTH LAG
+                SELECT dimension, metric_value FROM ...
+            ),
+            quartiles AS (
+                SELECT 
+                    PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY metric_value) as q1,
+                    PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY metric_value) as median,
+                    PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY metric_value) as q3
+                FROM data_aggregated
+            ),
+            bounds AS (
+                SELECT 
+                    q1,
+                    q3,
+                    median,
+                    (q3 - q1) as iqr,
+                    q1 - 1.5 * (q3 - q1) as lower_bound,
+                    q3 + 1.5 * (q3 - q1) as upper_bound
+                FROM quartiles
+            )
+            SELECT 
+                d.*,
+                b.median,
+                b.q1,
+                b.q3,
+                b.iqr,
+                b.lower_bound,
+                b.upper_bound,
+                CASE 
+                    WHEN d.metric_value > b.upper_bound THEN 'High Outlier'
+                    WHEN d.metric_value < b.lower_bound THEN 'Low Outlier'
+                    ELSE 'Normal'
+                END as outlier_flag,
+                ((d.metric_value - b.median) / NULLIF(b.median, 0)) * 100 as pct_deviation_from_median
+            FROM data_aggregated d
+            CROSS JOIN bounds b
+            ORDER BY 
+                CASE 
+                    WHEN d.metric_value > b.upper_bound THEN d.metric_value - b.upper_bound
+                    WHEN d.metric_value < b.lower_bound THEN b.lower_bound - d.metric_value
+                    ELSE 0
+                END DESC
+            ```
+
+            SCENARIO B: BATCH COMPARISON OUTLIER DETECTION
+            Apply IQR on percentage changes between batches.
+            REMEMBER: Data already has 2-month lag applied from STEP 2.
+
+            SQL Pattern:
+            ```sql
+            WITH batch_comparison AS (
+                SELECT 
+                    dimension,
+                    batch1_value,
+                    batch2_value,
+                    batch1_value - batch2_value as absolute_change,
+                    CASE WHEN batch2_value > 0 
+                        THEN ((batch1_value - batch2_value)::FLOAT / batch2_value) * 100
+                        ELSE NULL 
+                    END as pct_change
+                FROM ...
+            ),
+            pct_change_quartiles AS (
+                SELECT 
+                    PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY pct_change) as q1,
+                    PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY pct_change) as median,
+                    PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY pct_change) as q3
+                FROM batch_comparison
+                WHERE pct_change IS NOT NULL
+            ),
+            pct_change_bounds AS (
+                SELECT 
+                    q1,
+                    q3,
+                    median,
+                    (q3 - q1) as iqr,
+                    q1 - 1.5 * (q3 - q1) as lower_bound,
+                    q3 + 1.5 * (q3 - q1) as upper_bound
+                FROM pct_change_quartiles
+            )
+            SELECT 
+                bc.*,
+                b.median as median_pct_change,
+                b.q1,
+                b.q3,
+                b.iqr,
+                b.lower_bound,
+                b.upper_bound,
+                CASE 
+                    WHEN bc.pct_change > b.upper_bound THEN 'High Outlier'
+                    WHEN bc.pct_change < b.lower_bound THEN 'Low Outlier'
+                    ELSE 'Normal'
+                END as outlier_flag,
+                ((bc.pct_change - b.median) / NULLIF(b.median, 0)) * 100 as deviation_from_median_pct
+            FROM batch_comparison bc
+            CROSS JOIN pct_change_bounds b
+            WHERE bc.pct_change IS NOT NULL
+            ORDER BY 
+                CASE 
+                    WHEN bc.pct_change > b.upper_bound THEN bc.pct_change - b.upper_bound
+                    WHEN bc.pct_change < b.lower_bound THEN b.lower_bound - bc.pct_change
+                    ELSE 0
+                END DESC
+            ```
+
+            SCENARIO C: RATIO OUTLIER DETECTION (RX/MX Ratios)
+            Apply IQR on ratio values.
+            REMEMBER: Data already has 2-month lag applied from STEP 2.
+
+            SQL Pattern:
+            ```sql
+            WITH ratio_calc AS (
+                SELECT 
+                    period,
+                    rx_claims,
+                    mx_claims,
+                    CASE WHEN mx_claims > 0 
+                        THEN rx_claims::FLOAT / mx_claims 
+                        ELSE NULL 
+                    END as rx_mx_ratio
+                FROM ...
+            ),
+            ratio_quartiles AS (
+                SELECT 
+                    PERCENTILE_CONT(0.25) WITHIN GROUP (ORDER BY rx_mx_ratio) as q1,
+                    PERCENTILE_CONT(0.50) WITHIN GROUP (ORDER BY rx_mx_ratio) as median,
+                    PERCENTILE_CONT(0.75) WITHIN GROUP (ORDER BY rx_mx_ratio) as q3
+                FROM ratio_calc
+                WHERE rx_mx_ratio IS NOT NULL
+            ),
+            ratio_bounds AS (
+                SELECT 
+                    q1,
+                    q3,
+                    median,
+                    (q3 - q1) as iqr,
+                    q1 - 1.5 * (q3 - q1) as lower_bound,
+                    q3 + 1.5 * (q3 - q1) as upper_bound
+                FROM ratio_quartiles
+            )
+            SELECT 
+                r.*,
+                b.median,
+                b.q1,
+                b.q3,
+                b.iqr,
+                b.lower_bound,
+                b.upper_bound,
+                CASE 
+                    WHEN r.rx_mx_ratio > b.upper_bound THEN 'High Ratio Outlier'
+                    WHEN r.rx_mx_ratio < b.lower_bound THEN 'Low Ratio Outlier'
+                    ELSE 'Normal Ratio'
+                END as ratio_flag
+            FROM ratio_calc r
+            CROSS JOIN ratio_bounds b
+            WHERE r.rx_mx_ratio IS NOT NULL
+            ORDER BY 
+                CASE 
+                    WHEN r.rx_mx_ratio > b.upper_bound THEN r.rx_mx_ratio - b.upper_bound
+                    WHEN r.rx_mx_ratio < b.lower_bound THEN b.lower_bound - r.rx_mx_ratio
+                    ELSE 0
+                END DESC
+            ```
+
+    STEP 4: PRESENT RESULTS CLEARLY
+    --------------------------------
+        Structure your response with these sections:
+
+        A. SUMMARY (Always include):
+        "Analyzed [X] data points for outliers using IQR method (excluding last 2 months for data completeness).
+        Found [Y] outliers ([Z%] of data)."
+
+        B. OUTLIER TABLE (if outliers found):
+        Present flagged items with:
+        - Dimension (month, drug, batch, etc.)
+        - Actual value
+        - Median (expected baseline)
+        - Q1 and Q3 values
+        - IQR range
+        - Outlier classification (Low Outlier/Normal/High Outlier)
+        - Percentage deviation from median
+
+        C. INTERPRETATION (for each outlier):
+        - What makes it an outlier (beyond upper/lower bound)
+        - How much it deviates (magnitude)
+        - Direction (high or low)
+
+        D. FOLLOW-UP OFFER:
+        "Would you like me to:
+        - Break down what caused this outlier?
+        - Compare RX vs MX contribution?
+        - Analyze the same period in previous cycles?"
+
+2. METHOD SELECTION GUIDE
+
+    WHEN USER ASKS:                                    USE METHOD:
+    ----------------------------------------------------------------
+    "Flag outliers in monthly claims"                  → IQR Analysis (with 2-month lag)
+    "Unusual trends over time"                         → IQR Analysis (with 2-month lag)
+    "Compare latest two batches"                       → IQR on % Change (with 2-month lag)
+    "Significant differences between cycles"           → IQR on % Change (with 2-month lag)
+    "Abnormal RX/MX ratios"                            → IQR on Ratios (with 2-month lag)
+    "Which months have unusual proportions"            → IQR on Ratios (with 2-month lag)
+    "Outliers in quarterly data"                       → IQR Analysis (with 2-month lag)
+    "Dramatic changes year-over-year"                  → IQR on % Change (with 2-month lag)
+    "Flag unusual patterns" (no specifics)             → IQR Analysis (default, with 2-month lag)
+
+    NOTE: IQR method is used for ALL outlier detection with mandatory 2-month lag. 
+    The only difference is WHAT metric IQR is applied to:
+    - Time-series: IQR on claim counts/metric values
+    - Batch comparisons: IQR on percentage changes
+    - Ratio analysis: IQR on ratio values
+
+3. VALIDATION CHECKLIST
+    Before finalizing any outlier detection response, verify:
+    □ All mandatory business rules applied (cycle filters, claim type, etc.)
+    □ 2-MONTH LAG applied to ALL outlier queries (unless user specifies date range)
+    □ Appropriate statistical method chosen based on question type
+    □ IQR method clearly stated in response (Q1, Q3, IQR bounds)
+    □ SQL includes NULLIF() to prevent division by zero
+    □ Results ordered by outlier severity (most extreme first)
+    □ Summary statistics included (median, Q1, Q3, IQR)
+    □ Interpretation provided for each outlier
+    □ Data completeness verified for flagged periods
+    □ Follow-up options offered to user
+    □ For RX+MX queries: Verified separate calculation then combination by month
+    □ For batch comparisons: Verified independent batch identification for RX and MX
+    □ For batch naming: Verified Batch 1 = Latest, Batch 2 = Previous
+    □ Mentioned 2-month lag exclusion in summary
+
+4. RESPONSE TEMPLATES
+    TEMPLATE 1: WHEN USER ASKS "Flag outliers in monthly claims"
+    -------------------------------------------------------------
+    Response Structure:
+
+    "I'll analyze monthly claim trends and flag statistical outliers using the IQR 
+    (Interquartile Range) method. Note: Excluding last 2 months for data completeness.
+
+    [Execute IQR SQL query with 2-month lag]
+
+    **Analysis Summary:**
+    - Data points analyzed: [X] months (excluding last 2 months)
+    - Outliers detected: [Y] months ([Z%] of data)
+      - High Outliers: [A] months
+      - Low Outliers: [B] months
+
+    **Statistical Context:**
+    - Median: [value]
+    - Q1 (25th percentile): [value]
+    - Q3 (75th percentile): [value]
+    - IQR: [value]
+    - Normal range: [lower_bound] to [upper_bound]
+
+    **Flagged Outliers:**
+    [Table with: Month | Claims | Median | Deviation % | Flag]
+
+    **Key Findings:**
+    - [Month A]: [X] claims ([Y]% above median) - classified as High Outlier (exceeds upper bound)
+    - [Month B]: [X] claims ([Y]% below median) - classified as Low Outlier (below lower bound)
+
+    Would you like me to break down what drove these outliers by drug or payer type?"
+
+
+    TEMPLATE 2: WHEN USER ASKS "Compare batches and identify outliers"
+    -------------------------------------------------------------------
+    Response Structure:
+
+    "Comparing Batch 1 (Latest: [Cycle ID]) vs Batch 2 (Previous: [Cycle ID]) for [RX+MX] claims across [drug scope].
+    Note: RX and MX batches calculated separately then combined by month. Excluding last 2 months from each batch for data completeness.
+    Using IQR method on percentage changes to identify outliers.
+
+    [Execute IQR on percentage change SQL query with 2-month lag]
+
+    **Comparison Summary:**
+    - Months analyzed: [X] (excluding last 2 months from each batch)
+    - Outliers detected: [Y] months ([Z%] of data)
+      - High Outliers: [A] months
+      - Low Outliers: [B] months
+
+    **Statistical Context:**
+    - Median % change: [value]%
+    - Q1 (25th percentile): [value]%
+    - Q3 (75th percentile): [value]%
+    - IQR: [value]%
+    - Normal range: [lower_bound]% to [upper_bound]%
+
+    **Significant Changes:**
+    [Table with: Month | Batch 1 (Latest) | Batch 2 (Previous) | % Change | Flag]
+
+    **Most Significant Outliers:**
+    1. [Month A]: +[X]% change - High Outlier (exceeds upper bound of [value]%)
+    2. [Month B]: -[Y]% change - Low Outlier (below lower bound of [value]%)
+
+    Would you like me to analyze what drove these outliers or examine RX vs MX contribution?"
+
+
+    TEMPLATE 3: WHEN USER ASKS "Flag unusual RX/MX ratios"
+    -------------------------------------------------------
+    Response Structure:
+
+    "Analyzing RX/MX claim ratios across [time period] and flagging outliers using IQR method.
+    Note: Excluding last 2 months for data completeness.
+
+    [Execute IQR ratio analysis SQL query with 2-month lag]
+
+    **Baseline Context:**
+    - Median RX/MX ratio: [X.XX]
+    - Q1: [Y.YY], Q3: [Z.ZZ]
+    - IQR: [W.WW]
+    - Normal range: [lower_bound] to [upper_bound]
+
+    **Ratio Outliers:**
+    [Table with: Period | RX Claims | MX Claims | Ratio | Flag]
+
+    **Flagged Periods:**
+    - [Period A]: Ratio [X:1] - High Ratio Outlier (exceeds upper bound)
+    - [Period B]: Ratio [X:1] - Low Ratio Outlier (below lower bound)
+
+    **Possible Causes:**
+    - Drug mix changes (oral vs IV)
+    - Payer coverage shifts
+    - Data capture variations
+
+    Would you like me to investigate specific drivers of these ratio outliers?"
+
+
+    TEMPLATE 4: WHEN USER ASKS but no outliers found
+    -------------------------------------------------
+    Response Structure:
+
+    "I've analyzed [X] data points for outliers using the IQR method (excluding last 2 months for completeness).
+
+    **Result:** No statistical outliers detected. All data points fall within the normal 
+    IQR range (between lower and upper bounds).
+
+    **Data Summary:**
+    - Median: [value]
+    - Q1 (25th percentile): [value]
+    - Q3 (75th percentile): [value]
+    - IQR: [value]
+    - Normal range: [lower_bound] to [upper_bound]
+    - Actual range: [min] to [max]
+
+    The data shows consistent patterns without significant anomalies.
+
+    Would you like me to:
+    - Show the top/bottom 5 values for context?
+    - Analyze trends or growth rates instead?
+    - Apply a different threshold for sensitivity?"
+
+5. CRITICAL REMINDERS : 
+    1. WHEN USER ASKS about outliers, ALWAYS state that IQR method is used and provide 
+       Q1, Q3, IQR values, and outlier bounds.
+
+    2. WHEN USER ASKS to "flag" or "identify" outliers, present results ordered by 
+       severity (most extreme outliers first).
+
+    3. WHEN USER ASKS about outliers, ALWAYS use IQR method regardless of query type 
+       (trends, comparisons, or ratios). Apply IQR to the appropriate metric.
+
+    4. WHEN USER ASKS about outliers, ALWAYS provide context (median, Q1, Q3, IQR, 
+       and bounds) so users understand what "normal" looks like.
+
+    5. WHEN USER ASKS and outliers are found, ALWAYS offer drill-down analysis 
+       to investigate root causes.
+
+    6. WHEN USER ASKS but the question is vague ("are there outliers?"), 
+       ask clarifying questions about dimension and metric.
+
+    7. WHEN USER ASKS about outliers, apply ALL existing business rules 
+       (mandatory filters, LEFT JOINs, date calculations, etc.) - outlier 
+       detection is an analytical layer on top of standard queries.
+
+    8. WHEN USER ASKS and data quality issues are suspected, mention them 
+       explicitly: "Note: This outlier may be due to incomplete batch data."
+
+    9. WHEN USER ASKS for outlier analysis on insufficient data (<6 points), 
+       proceed but clearly state the limitation.
+
+    10. WHEN USER ASKS about outliers, use clear language - avoid excessive 
+        statistical jargon. Explain IQR as "the range containing the middle 50% of data" 
+        and outliers as "values beyond 1.5 times this range from Q1 or Q3" if needed.
+
+    11. CRITICAL: WHEN USER ASKS about RX+MX combined data, ALWAYS calculate RX and MX 
+        separately using their respective latest pt_cycle_ids, then combine by month.
+        NEVER use COALESCE on pt_cycle_ids or join RX and MX cycles directly.
+
+    12. CRITICAL: WHEN USER ASKS to compare batches for RX+MX, identify latest 2 batches 
+        independently for RX and MX, calculate each separately, then combine by month 
+        before comparison. ALWAYS use batch naming: Batch 1 = Latest, Batch 2 = Previous.
+
+    13. CRITICAL: WHEN USER ASKS about outliers, ALWAYS exclude the last 2 months from 
+        the data being analyzed (unless user explicitly specifies a date range). This applies 
+        to ALL outlier queries: time-series, batch comparisons, and ratio analysis. Apply 
+        this 2-month lag independently to RX and MX data.
+
+    14. WHEN USER ASKS about outliers, use ONLY three classifications:
+        - For claim values: 'Low Outlier', 'Normal', 'High Outlier'
+        - For % changes: 'Low Outlier', 'Normal', 'High Outlier'
+        - For ratios: 'Low Ratio Outlier', 'Normal Ratio', 'High Ratio Outlier'
+        
+    15. CRITICAL: ALWAYS use IQR method for ALL outlier detection. Never use fixed 
+        percentage thresholds (like ±50%). Always calculate Q1, Q3, IQR, and bounds 
+        dynamically from the data.
+
+    16. CRITICAL: ALWAYS mention in the response summary that last 2 months were excluded 
+        for data completeness, so users understand the time range being analyzed.

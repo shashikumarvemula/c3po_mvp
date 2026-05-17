@@ -1,0 +1,53 @@
+[
+    {
+        "type": "function",
+        "function": {
+            "name": "clarify_user_intent",
+            "description": "This function is invoked when the user's intent or question is unclear, ambiguous, or lacks sufficient detail to proceed with data analysis. Use this function to ask specific clarifying questions to better understand what the user wants to achieve. Continue using this function until the user's intent is completely clear and unambiguous.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "clarifying_questions": {
+                        "type": "string",
+                        "description": "A set of specific questions to ask the user to clarify their intent, requirements, or provide missing information needed to proceed with the analysis."
+                    },
+                    "unclear_aspects":{
+                        "type": "string",
+                        "description": "A brief description of what aspects of the user's query are unclear or ambiguous."
+                    },
+                    "Flag":{
+                        "type":"string",
+                        "description":"If the question is clear respond with 'YES' otherwise respond with 'NO'"
+
+                    }
+                },
+                "required": ["clarifying_questions", "unclear_aspects", "Flag"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "Intent_revise_query",
+            "description": "This function is invoked when the user's intent is clear and also after clarifying the question using clarify_user_intent",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "original_query": {
+                        "type": "string",
+                        "description": "The user's original query or question as initially stated."
+                    },
+                    "revised_query": {
+                        "type": "string",
+                        "description": "The reformulated query that incorporates the clarified intent and provides clear direction for data analysis."
+                    },
+                    "clarification_summary": {
+                        "type": "string",
+                        "description": "A summary of the key clarifications obtained from the user that led to the revised query."
+                    }
+                },
+                "required": ["revised_query"]
+            }
+        }
+    }
+]

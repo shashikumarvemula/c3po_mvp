@@ -1,0 +1,305 @@
+You extract specific details that answer the user's question when they appear in BOTH the insights draft AND respondent text.
+
+CORE RULE: Extract ONLY when detail appears in BOTH sources.
+
+=== DETAILED EXTRACTION EXAMPLES ===
+
+EXAMPLE 1: SUCCESSFUL EXTRACTION (SYMPTOM QUESTION)
+
+User Question: "What symptoms indicate metastatic disease?"
+
+Insights Draft: "bone pain, fatigue, weight loss, headaches, nausea"
+
+Respondent Text: "Respondent: Patients usually present with bone pain and fatigue. We also monitor for clinical signs and symptoms during follow-up."
+
+STEP-BY-STEP MATCHING:
+1. Check "bone pain": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+2. Check "fatigue": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+3. Check "weight loss": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+4. Check "headaches": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+5. Check "nausea": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+6. "clinical signs and symptoms": In insights? NO ✗ → SKIP (too vague)
+
+OUTPUT: {"topic_of_text": ["bone pain symptom", "fatigue symptom"]}
+
+---
+
+EXAMPLE 2: ZERO EXTRACTION (NO MATCHES)
+
+User Question: "What symptoms indicate metastatic disease?"
+
+Insights Draft: "bone pain, headaches, breathing problems, vision changes"
+
+Respondent Text: "Respondent: It's difficult to predict. NCCN guidelines recommend scans based on symptoms. Patients can present with local or regional recurrence. We look for clinical signs and symptoms."
+
+STEP-BY-STEP MATCHING:
+1. Check "bone pain": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+2. Check "headaches": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+3. Check "breathing problems": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+4. Check "vision changes": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+5. "clinical signs and symptoms": In insights? NO ✗ → SKIP (too vague, not in insights)
+
+OUTPUT: {"topic_of_text": []}
+
+EXPLANATION: Respondent only mentions general "symptoms" but doesn't specify which ones. No specific details from insights are mentioned.
+
+---
+
+EXAMPLE 3: TIMELINE EXTRACTION
+
+User Question: "How long does treatment take to start?"
+
+Insights Draft: "2-3 weeks, 4-6 weeks, insurance authorization delays, prior auth takes weeks"
+
+Respondent Text: "Doctor: Treatment timelines vary. Usually 2-3 weeks if no issues. Insurance authorization can extend it to 4-6 weeks. Prior auth is a problem."
+
+STEP-BY-STEP MATCHING:
+1. Check "2-3 weeks": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+2. Check "4-6 weeks": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+3. Check "insurance authorization delays": In insights? YES ✓ | In respondent "insurance authorization can extend"? YES ✓ (synonym) → EXTRACT
+4. Check "prior auth takes weeks": In insights? YES ✓ | In respondent "prior auth is a problem"? YES ✓ (related) → EXTRACT
+5. "treatment timelines": In insights? NO ✗ → SKIP (too general)
+
+OUTPUT: {"topic_of_text": ["treatment start 2-3 weeks", "insurance delays 4-6 weeks", "prior authorization delays", "prior auth extends timeline"]}
+
+---
+
+EXAMPLE 4: TEST/DIAGNOSTIC EXTRACTION
+
+User Question: "What tests diagnose metastatic disease?"
+
+Insights Draft: "NGS testing, CT scans, PET scans, blood work, MRI, biopsy"
+
+Respondent Text: "HCP: We perform various tests for staging. NGS testing is standard. CT scans and blood work are routine. Sometimes we need additional workup."
+
+STEP-BY-STEP MATCHING:
+1. Check "NGS testing": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+2. Check "CT scans": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+3. Check "PET scans": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+4. Check "blood work": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+5. Check "MRI": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+6. Check "biopsy": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+7. "various tests": In insights? NO ✗ → SKIP (too general)
+8. "additional workup": In insights? NO ✗ → SKIP (too vague)
+
+OUTPUT: {"topic_of_text": ["NGS testing biomarkers", "CT scans staging", "blood work routine"]}
+
+---
+
+EXAMPLE 5: TREATMENT EXTRACTION WITH SYNONYMS
+
+User Question: "What treatments are used for metastatic disease?"
+
+Insights Draft: "chemotherapy, immunotherapy, pembrolizumab, atezolizumab, radiation therapy, surgery"
+
+Respondent Text: "Respondent: We use different treatment modalities. Chemo is first-line. Immunotherapy with pembrolizumab for PD-L1 positive. Radiation for bone mets."
+
+STEP-BY-STEP MATCHING:
+1. Check "chemotherapy": In insights? YES ✓ | In respondent "chemo"? YES ✓ (synonym) → EXTRACT
+2. Check "immunotherapy": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+3. Check "pembrolizumab": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+4. Check "atezolizumab": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+5. Check "radiation therapy": In insights? YES ✓ | In respondent "radiation"? YES ✓ (synonym) → EXTRACT
+6. Check "surgery": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+7. "treatment modalities": In insights? NO ✗ → SKIP (too general)
+
+OUTPUT: {"topic_of_text": ["chemotherapy first-line", "immunotherapy pembrolizumab", "pembrolizumab PD-L1 positive", "radiation therapy bone mets"]}
+
+---
+
+EXAMPLE 6: BARRIER EXTRACTION
+
+User Question: "What causes treatment delays?"
+
+Insights Draft: "insurance delays, prior authorization, financial concerns, staffing shortages, patient scheduling"
+
+Respondent Text: "HCP: We face various barriers. Insurance is the main issue. Prior auth takes weeks. Sometimes patients can't get time off work."
+
+STEP-BY-STEP MATCHING:
+1. Check "insurance delays": In insights? YES ✓ | In respondent "insurance is main issue"? YES ✓ → EXTRACT
+2. Check "prior authorization": In insights? YES ✓ | In respondent "prior auth takes weeks"? YES ✓ → EXTRACT
+3. Check "financial concerns": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+4. Check "staffing shortages": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+5. Check "patient scheduling": In insights? YES ✓ | In respondent "can't get time off work"? MAYBE → This is related but not exact match → USE JUDGMENT → This IS a scheduling issue → EXTRACT
+6. "various barriers": In insights? NO ✗ → SKIP (too general)
+
+OUTPUT: {"topic_of_text": ["insurance delays treatment", "prior authorization weeks", "patient work schedule conflicts"]}
+
+---
+
+EXAMPLE 7: COMPLEX CASE - ROLE/PROCESS QUESTION
+
+User Question: "How does your role change when patient becomes metastatic?"
+
+Insights Draft: "more emotional support, coordinate with radiation oncology, involve social worker, see patients more frequently, palliative care involvement"
+
+Respondent Text: "Respondent: My role doesn't change much. I'm still the contact person. But I do provide more emotional support. We get radiation involved if needed. Sometimes the care team expands."
+
+STEP-BY-STEP MATCHING:
+1. Check "more emotional support": In insights? YES ✓ | In respondent? YES ✓ → EXTRACT
+2. Check "coordinate with radiation oncology": In insights? YES ✓ | In respondent "get radiation involved"? YES ✓ (synonym) → EXTRACT
+3. Check "involve social worker": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+4. Check "see patients more frequently": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+5. Check "palliative care involvement": In insights? YES ✓ | In respondent? NO ✗ → SKIP
+6. "role doesn't change much": In insights? NO ✗ → SKIP (general statement)
+7. "care team expands": In insights? NO ✗ → SKIP (too vague - which team members?)
+
+OUTPUT: {"topic_of_text": ["provide more emotional support", "coordinate with radiation oncology"]}
+
+---
+
+SYNONYM REFERENCE GUIDE:
+
+COMMON MEDICAL SYNONYMS:
+- "chemotherapy" = "chemo", "cytotoxic therapy"
+- "immunotherapy" = "immune checkpoint inhibitors", "IO therapy"
+- "radiation therapy" = "radiation", "RT", "radiotherapy"
+- "CT scan" = "CAT scan", "computed tomography"
+- "MRI" = "magnetic resonance imaging"
+- "NGS testing" = "next generation sequencing", "comprehensive genomic profiling"
+- "PD-L1 testing" = "PD-L1 expression", "PD-L1 status"
+- "bone pain" = "skeletal pain", "bone discomfort"
+- "fatigue" = "tiredness", "exhaustion"
+
+TIMELINE SYNONYMS:
+- "2-3 weeks" = "two to three weeks", "a couple weeks"
+- "insurance delays" = "insurance authorization", "prior auth delays", "payer issues"
+
+BARRIER SYNONYMS:
+- "financial concerns" = "cost issues", "out-of-pocket expenses", "affordability"
+- "staffing shortages" = "staff limitations", "personnel issues"
+
+---
+
+DECISION FLOWCHART FOR EACH DETAIL:
+
+START → Is detail in insights draft?
+  ├─ NO → SKIP (don't extract)
+  └─ YES → Is detail in respondent text (exact or synonym)?
+       ├─ NO → SKIP (don't extract)
+       └─ YES → EXTRACT (use respondent's terminology)
+
+---
+
+
+=== CRITICAL: STRICT FORMATTING RULES ===
+
+RULE 1: NORMALIZE TERMINOLOGY
+- Use PLURAL form from insights: "antibody-drug conjugates" NOT "antibody-drug conjugate"
+- Use exact spelling from insights: "PD-L1 status" NOT "Pd-l1 status" or "PD-l1 status"
+- Use full terms from insights: "pembrolizumab (Keytruda)" NOT just "Keytruda"
+
+RULE 2: CONSISTENT TOPIC STRUCTURE
+Every topic must follow: [SPECIFIC DETAIL] + [CONTEXT]
+
+Examples:
+✓ "chemotherapy first-line treatment"
+✓ "chemotherapy progressed patients"  
+✓ "antibody-drug conjugates second-line"
+✗ "chemotherapy" (missing context)
+✗ "chemotherapy for triple negative breast cancer" (context too generic)
+
+RULE 3: VERIFY AGAINST INSIGHTS BEFORE EXTRACTION
+Before extracting ANY topic, ask:
+1. Is the base term in insights? (chemotherapy ✓, infusion schedule ?)
+2. Is this the exact form in insights? (conjugates vs conjugate)
+3. What specific context from chunk should I add?
+
+EXAMPLE: CORRECT EXTRACTION PROCESS
+
+Insights Draft contains:
+"chemotherapy, pembrolizumab (Keytruda), antibody-drug conjugates (ADCs), PD-L1 status"
+
+Chunk text:
+"Respondent: For first-line, we use chemotherapy. Second-line is usually antibody drug conjugates like Trodelvy. PD-L1 testing determines if we can use Keytruda."
+
+STEP-BY-STEP:
+1. Check "chemotherapy": 
+   - In insights? YES ✓
+   - In chunk? "first-line, we use chemotherapy" ✓
+   - Context? "first-line"
+   - Extract: "chemotherapy first-line treatment"
+
+2. Check "pembrolizumab (Keytruda)":
+   - In insights? YES ✓  
+   - In chunk? "use Keytruda" ✓
+   - Context? "PD-L1 testing determines"
+   - Extract: "pembrolizumab PD-L1 dependent"
+
+3. Check "antibody-drug conjugates (ADCs)":
+   - In insights? YES ✓
+   - In chunk? "antibody drug conjugates" ✓ (match despite spacing)
+   - Context? "second-line"
+   - Extract: "antibody-drug conjugates second-line"
+
+4. Check "PD-L1 status":
+   - In insights? YES ✓
+   - In chunk? "PD-L1 testing" ✓ (synonym)
+   - Context? "determines if we can use Keytruda"
+   - Extract: "PD-L1 status testing determines treatment"
+
+OUTPUT: 
+{
+  "topic_of_text": [
+    "chemotherapy first-line treatment",
+    "pembrolizumab PD-L1 dependent", 
+    "antibody-drug conjugates second-line",
+    "PD-L1 status testing determines treatment"
+  ]
+}
+
+WRONG OUTPUT (DO NOT DO THIS):
+{
+  "topic_of_text": [
+    "chemotherapy",  ← Missing context
+    "antibody-drug conjugate",  ← Wrong form (singular vs plural in insights)
+    "Keytruda",  ← Should use full term from insights
+    "testing determines treatment"  ← Missing which test
+  ]
+}
+
+=== TERM NORMALIZATION TABLE ===
+
+From insights, use these EXACT forms:
+- "antibody-drug conjugates" (NOT: "antibody drug conjugate", "ADC", "antibody-drug conjugate")
+- "pembrolizumab (Keytruda)" (NOT: "Keytruda", "pembrolizumab", "pembro")
+- "sacituzumab govitecan (Trodelvy)" (NOT: "Trodelvy", "SG")
+- "trastuzumab deruxtecan (Enhertu)" (NOT: "Enhertu", "T-DXd")
+- "PD-L1 status" (NOT: "Pd-l1 status", "PD-l1", "PDL1")
+- "BRCA testing" (NOT: "brca testing", "BRCA test")
+
+
+
+MANDATORY OUTPUT FORMAT:
+
+CORRECT FORMATS:
+✓ {"topic_of_text": ["bone pain symptom", "fatigue symptom"]}
+✓ {"topic_of_text": ["treatment start 2-3 weeks"]}
+✓ {"topic_of_text": []}
+✓ {"topic_of_text": ["NGS testing", "CT scans staging", "blood work"]}
+
+WRONG FORMATS:
+✗ {'topic_of_text': ['item']} (single quotes)
+✗ {"topics": ["item"]} (wrong key)
+✗ ["item"] (missing dictionary)
+✗ {"topic_of_text": "item"} (string not list)
+✗ {"topic_of_text": ["item",]} (trailing comma)
+
+---
+
+VERIFICATION CHECKLIST BEFORE OUTPUT:
+□ Read complete insights draft?
+□ Identified ALL specific details in insights?
+□ Checked EACH insights detail against respondent text?
+□ Only extracted when detail in BOTH sources?
+□ Used respondent's exact terminology?
+□ Proper JSON format (double quotes, no trailing commas)?
+□ Dictionary with "topic_of_text" key?
+□ Value is a list (square brackets)?
+
+INPUT:
+Text: {text}
+User Question: {question}
+Insights Draft: {insights_draft}
+
+Return ONLY valid JSON. No additional text.

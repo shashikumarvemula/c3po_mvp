@@ -1,0 +1,73 @@
+Pre-defined Business Rules for Sales Data Analysis:
+
+1. Default Drug Assumption
+- If a query does not specify a drug (across all account types), assume the user is referring to Trodelvy and revise the query accordingly.
+- Example:
+Query: "Which community parent accounts are declining in R13W vs P13W?"
+Interpretation: "Which community parent accounts for Trodelvy are declining in R13W vs P13W?"
+
+2. Data Sources & Standardization
+- Sales Datasets and Quantity Columns:
+tro_sales_data → qty_sold_pu (used for Trodelvy sales)
+ddd_sales_data → trx_cnt (used for all other drugs)
+- Drugs in ddd_sales_data: 'Gemzar', 'Taxane', 'Enhertu', 'Vinorelbine', 'Xeloda', 'Halaven', 'CDK','Itovebi','Datroway'
+
+3. Merging Strategy 
+- Standardization & Preprocessing:
+a. Initially, convert trx_cnt to qty_sold_pu on-the-fly before merging the columns.
+b. Ensure consistent data types and timezone handling (UTC).
+c. Validate merged dataset for completeness and accuracy before proceeding.
+
+- Concatenation Strategy:
+a. If a query requires all sales data, combine tro_sales_data and ddd_sales_data by aligning common columns: ex - parent_eid, drug_name, week_end_date
+b. Rename columns consistently before aggregation.
+c. Perform concatenation before any further calculations.
+
+4. Date Handling Rules
+a. Always calculate the latest date and convert it to string format before using it.
+b. Always calculate the latest date and convert it to string format before using it for comparisons.
+c. Use week_end_date for weekly or monthly analysis.
+- Format: ISO 8601 (UTC timezone)
+d. If no date is specified, default to the latest week_end_date.
+e. Use shipt_dt only for daily sales analysis.
+
+a. Reference Dates for Calculations:
+- Multi-drug calculations (market share, comparisons): Use the latest week_end_date from DDD dataset.
+- Trodelvy-specific calculations (not market share): Use the latest week_end_date from 867 dataset.
+- If using multiple data sources: Always use the latest week_end_date from ddd_sales_data for multi-drug calculations.
+- Trodelvy-specific calculations (not market share): Use the latest week_end_date from tro_sales_data.
+- Never use the current date for any calculations.
+
+c. General Rules:
+- Combine latest_date with date offsets (e.g., -90 days or -3 months) as needed.
+- Perform date filtering first, then aggregate data.
+- Always follow these rules, even for queries like “current year” or “this year”—do not assume the actual calendar year.
+- To calculate average sales - Calculate total sales per week within the range, then derive averages as needed.
+- Do not consider fiscal years
+
+d. QTD (Quarter to Date) Definition: The start date is the first day of the respective quarter, while the end date is always the latest available date.
+
+e. YTD (Year to Date) Definition: The start date is January 1st of the respective year, and the end date is always the latest available date.
+
+5. Market Share Calculation
+- Definition of TPC:
+  TPC = Combination of 'Gemzar', 'Halaven', 'Vinorelbine', 'Xeloda'
+
+- Market Share Formula:
+  Numerator = Sales of the specific drug.
+  Denominator = Total market sales, which is ddd_sales_data + tro_sales_data. 
+  tro_sales_data → Trodelvy sales
+  ddd_sales_data → Sales of all other drugs
+  Calculation: Market Share (%) = (Total sales of the specific drug ÷ Total market sales) × 100.
+
+
+6. Additional Business Rules
+  - Ensure that when a user queries about accounts, you should return the account name rather than the ID. ex: use parent_name instead of parent_eid
+  - Use linked_id for Child Account IDs.
+  - linkedid_bc_segment = Child BC segment.
+  - Always sort tables by qty_sold_pu/trx_cnt for queries requesting the top 10, 15, or any other number of entries before visualization.
+  a. New Account Definition:
+    - An account is "new" if its first appearance falls within the analysis period.
+    - Steps to determine new accounts:
+      aa. Find earliest appearance date of each account.
+      ab. Compare against the analysis period to flag new accounts.

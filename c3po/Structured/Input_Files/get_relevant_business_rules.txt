@@ -1,0 +1,352 @@
+PATIENT JOURNEY MODULE: Patient Treatment Sequence Analysis Functions
+
+========================================
+DATABASE CONFIGURATION
+========================================
+
+Catalog: `commercial-us-apo-onc-iia-dev`
+Schema: `setuserv_adhocs`
+Functions: `get_immediate_sequence_patients`, `get_gap_return_patients`, `get_combo_mono_switch_patients`, `get_latest_regimen_date`
+
+Always use fully qualified names in all queries.
+
+----------------------------------------
+FUNCTION 1: get_immediate_sequence_patients
+----------------------------------------
+
+Purpose: Finds patients with consecutive drug sequences (A→B→C→D→E) where drugs follow immediately with NO treatments in between.
+
+Signature:
+    `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_immediate_sequence_patients`(
+        drug_1 STRING,           -- REQUIRED: First drug in sequence
+        drug_2 STRING,           -- REQUIRED: Second drug in sequence
+        drug_3 STRING,           -- OPTIONAL: Third drug (NULL if not needed)
+        drug_4 STRING,           -- OPTIONAL: Fourth drug (NULL if not needed)
+        drug_5 STRING,           -- OPTIONAL: Fifth drug (NULL if not needed)
+        indication_param STRING, -- OPTIONAL: TNBC, HR+/HER2-, or NULL for all
+        start_date DATE,         -- OPTIONAL: Filter regimens starting >= this date, or NULL
+        end_date DATE,           -- OPTIONAL: Filter regimens starting <= this date, or NULL
+        lot_filter ARRAY<INT>,   -- OPTIONAL: array(1,2) for 1L and 2L, or NULL for all
+        max_gap_days INT         -- OPTIONAL: Max days between regimens, or NULL for any gap
+    )
+
+Returns:
+    patient_id STRING
+    sequence_start_date DATE
+    sequence_end_date DATE
+    drug_1_name STRING
+    drug_2_name STRING
+    drug_3_name STRING
+    drug_4_name STRING
+    drug_5_name STRING
+    drug_1_lot INT
+    drug_2_lot INT
+    drug_3_lot INT
+    drug_4_lot INT
+    drug_5_lot INT
+    gap_1_to_2_days INT
+    gap_2_to_3_days INT
+    gap_3_to_4_days INT
+    gap_4_to_5_days INT
+    total_sequence_days INT
+    indication_value STRING
+
+Key Notes:
+    - Searches BOTH regimen_grouped_name AND product_name columns for drug matching
+    - Handles concurrent therapy by prioritizing user's specified drug
+    - Use for: A to B, A then B then C, switched from A to B
+
+
+----------------------------------------
+FUNCTION 2: get_gap_return_patients
+----------------------------------------
+
+Purpose: Finds patients who stopped a drug then restarted the SAME drug. Can filter for true treatment-free gaps OR allow other drugs in between.
+
+Signature:
+    `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_gap_return_patients`(
+        drug_a STRING,           -- REQUIRED: Drug name to check for return
+        indication_param STRING, -- OPTIONAL: TNBC, HR+/HER2-, or NULL for all
+        start_date DATE,         -- OPTIONAL: Filter regimens starting >= this date, or NULL
+        end_date DATE,           -- OPTIONAL: Filter regimens starting <= this date, or NULL
+        min_gap_days INT,        -- OPTIONAL: Minimum gap required (180 for 6 months), or NULL
+        lot_filter ARRAY<INT>,   -- OPTIONAL: array(1,2), or NULL for all
+        allow_middle_drugs BOOLEAN -- REQUIRED: FALSE = true gap only, TRUE = allow any drugs between
+    )
+
+Returns:
+    patient_id STRING
+    first_occurrence_start DATE
+    first_occurrence_end DATE
+    second_occurrence_start DATE
+    second_occurrence_end DATE
+    gap_days INT
+    treatment_free_gap BOOLEAN
+    middle_drugs STRING
+    first_lot INT
+    second_lot INT
+    indication_value STRING
+
+Key Notes:
+    - Searches BOTH regimen_grouped_name AND product_name columns
+    - allow_middle_drugs = FALSE: Only patients with NO drugs between occurrences
+    - allow_middle_drugs = TRUE: Includes patients who took OTHER drugs before returning
+    - Use for: restarted X, returned to X, went back to X
+
+
+----------------------------------------
+FUNCTION 3: get_combo_mono_switch_patients
+----------------------------------------
+
+Purpose: Detects switches between combination therapy and monotherapy for a specific drug using regimen_breakout column.
+
+Signature:
+    `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_combo_mono_switch_patients`(
+        drug STRING,             -- REQUIRED: Drug to analyze (TRODELVY, CDK)
+        switch_type STRING,      -- REQUIRED: COMBO_TO_MONO, MONO_TO_COMBO, or BOTH
+        indication_param STRING, -- OPTIONAL: TNBC, HR+/HER2-, or NULL for all
+        start_date DATE,         -- OPTIONAL: Filter regimens starting >= this date, or NULL
+        end_date DATE,           -- OPTIONAL: Filter regimens starting <= this date, or NULL
+        lot_filter ARRAY<INT>    -- OPTIONAL: array(1,2), or NULL for all
+    )
+
+Returns:
+    patient_id STRING
+    first_period_start DATE
+    first_period_end DATE
+    first_therapy_type STRING
+    first_regimen_breakout STRING
+    first_lot INT
+    second_period_start DATE
+    second_period_end DATE
+    second_therapy_type STRING
+    second_regimen_breakout STRING
+    second_lot INT
+    gap_days INT
+    indication_value STRING
+
+Key Notes:
+    - Uses regimen_breakout column for accurate combo/mono classification
+    - switch_type = COMBO_TO_MONO: Patients who switched from combo to mono
+    - switch_type = MONO_TO_COMBO: Patients who switched from mono to combo
+    - switch_type = BOTH: Patients who switched in either direction
+    - Use for: TRO combo to mono, moved from mono to combo
+
+
+----------------------------------------
+FUNCTION 4: get_latest_regimen_date
+----------------------------------------
+
+Purpose: Returns the most recent regimen_start_date in the dataset. Use this FIRST when user asks for relative time periods.
+
+Signature:
+    `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_latest_regimen_date`()
+
+Returns: Single DATE value
+
+Example:
+    SELECT `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_latest_regimen_date`();
+    Returns: DATE'2025-11-20'
+
+
+========================================
+QUERY GENERATION LOGIC
+========================================
+
+STEP 1: Determine Which Function
+
+User Query Contains                                    Use Function                           Example
+switched from A to B, A to B, A then B                 Function 1                             CDK to Enhertu
+A then B then C (3+ drugs)                             Function 1                             Trodelvy→Enhertu→Pembro
+restarted X, returned to X, went back to X             Function 2                             Restarted Pembro
+combo to mono, mono to combo, TRO combo to TRO mono    Function 3                             Trodelvy combo to mono
+took A in 1L then B in 2L                              Function 1 + lot_filter + WHERE        TRO 1L → Chemo 2L
+
+
+STEP 2: Extract Parameters
+
+User Says                    Parameter                   Value
+in HR+ or in HR+/HER2-       indication_param            HR+/HER2-
+in TNBC                      indication_param            TNBC
+in 2024                      start_date, end_date        DATE'2024-01-01', DATE'2024-12-31'
+Q1 2025                      start_date, end_date        DATE'2025-01-01', DATE'2025-03-31'
+last 12 months               start_date, end_date        Call get_latest_regimen_date() first, then calculate
+past 2 years                 start_date, end_date        Call get_latest_regimen_date() first, then calculate
+in 1L then 2L                lot_filter                  array(1, 2) + WHERE drug_1_lot = 1 AND drug_2_lot = 2
+within 60 days               max_gap_days (Fn1)          60
+after 6 months               min_gap_days (Fn2)          180
+with treatment gap           allow_middle_drugs (Fn2)    FALSE
+after other drugs            allow_middle_drugs (Fn2)    TRUE
+No time mentioned            start_date, end_date        NULL, NULL
+No indication                indication_param            NULL
+
+
+STEP 3: Handle Relative Time
+
+For last X months/years or past X months/years:
+    1. Call get_latest_regimen_date() first
+    2. Calculate start_date = latest_date - X period
+    3. Use calculated dates in main function
+
+Examples:
+    last 12 months - If latest = 2025-11-20
+        start_date = DATE'2024-11-20'  (12 months before)
+        end_date = DATE'2025-11-20'    (latest)
+
+    past 2 years - If latest = 2025-11-20
+        start_date = DATE'2023-11-20'  (2 years before)
+        end_date = DATE'2025-11-20'    (latest)
+
+
+Notes:
+    - Drug matching is case-insensitive
+    - Functions search BOTH regimen_grouped_name AND product_name columns
+    - Partial matches work (CDK matches CDK MONO, CDK + FULVESTRANT)
+
+Example 1: Simple two-drug sequence
+
+Q: How many patients switched from CDK to Enhertu in HR+ patients?
+
+SELECT COUNT(DISTINCT patient_id)
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_immediate_sequence_patients`(
+    'CDK', 'ENHERTU', NULL, NULL, NULL,
+    'HR+/HER2-', NULL, NULL, NULL, NULL
+);
+
+
+Example 2: Three-drug sequence
+
+Q: Show patients who went Trodelvy then Enhertu then Pembro in TNBC
+
+SELECT patient_id, sequence_start_date, drug_1_name, drug_2_name, drug_3_name
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_immediate_sequence_patients`(
+    'TRODELVY', 'ENHERTU', 'PD-1/PD-L1', NULL, NULL,
+    'TNBC', NULL, NULL, NULL, NULL
+);
+
+
+Example 3: LOT-specific with relative time
+
+Q: How many patients took TRO in 1L then moved to chemo in 2L in the last 2 years?
+
+Step 1:
+SELECT `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_latest_regimen_date`();
+Returns: DATE'2025-11-20'
+
+Step 2:
+SELECT COUNT(DISTINCT patient_id)
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_immediate_sequence_patients`(
+    'TRODELVY', 'CHEMO', NULL, NULL, NULL,
+    NULL,
+    DATE'2023-11-20',
+    DATE'2025-11-20',
+    array(1, 2),
+    NULL
+)
+WHERE drug_1_lot = 1 AND drug_2_lot = 2;
+
+
+Example 4: Gap return with true treatment-free gap
+
+Q: How many patients restarted Pembro after a treatment break?
+
+SELECT COUNT(DISTINCT patient_id)
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_gap_return_patients`(
+    'PD-1/PD-L1', NULL, NULL, NULL, NULL, NULL, FALSE
+);
+
+
+Example 5: Gap return allowing middle drugs
+
+Q: Patients who returned to CDK after trying other drugs, with at least 6 months gap
+
+SELECT patient_id, middle_drugs, gap_days, first_occurrence_end, second_occurrence_start
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_gap_return_patients`(
+    'CDK', 'HR+/HER2-', NULL, NULL, 180, NULL, TRUE
+)
+ORDER BY gap_days DESC
+LIMIT 20;
+
+
+Example 6: Combo to mono switch
+
+Q: How many patients switched from Trodelvy combo to Trodelvy mono in TNBC?
+
+SELECT COUNT(DISTINCT patient_id)
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_combo_mono_switch_patients`(
+    'TRODELVY', 'COMBO_TO_MONO', 'TNBC', NULL, NULL, NULL
+);
+
+
+Example 7: Show combo/mono switch details
+
+Q: Show me patients who switched from CDK combo to CDK mono in HR+, with details
+
+SELECT patient_id, first_regimen_breakout, second_regimen_breakout,
+       first_period_start, second_period_start, gap_days
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_combo_mono_switch_patients`(
+    'CDK', 'COMBO_TO_MONO', 'HR+/HER2-', NULL, NULL, NULL
+)
+LIMIT 20;
+
+
+Example 8: Absolute time period
+
+Q: CDK to Enhertu switches in Q1 2024 in HR+ patients
+
+SELECT COUNT(DISTINCT patient_id)
+FROM `commercial-us-apo-onc-iia-dev`.`setuserv_adhocs`.`get_immediate_sequence_patients`(
+    'CDK', 'ENHERTU', NULL, NULL, NULL,
+    'HR+/HER2-',
+    DATE'2024-01-01',
+    DATE'2024-03-31',
+    NULL, NULL
+);
+
+---
+
+## Critical Rules
+
+### Function Usage Rules
+1. **Always use fully qualified function names: `commercial-us-apo-onc-iia-dev`.setuserv_adhocs.function_name**
+2. **Always use NULL for unused parameters, never empty string ''**
+3. **Array syntax is array(1,2), not [1,2]**
+4. **For relative time, ALWAYS call get_latest_regimen_date() FIRST**
+5. **For LOT-specific queries, use lot_filter array(1,2) AND add WHERE drug_X_lot = Y**
+
+### Function Selection Rules
+6. **Function 1** for consecutive sequences with NO drugs between
+7. **Function 2** for same drug returns (with or without middle drugs)
+8. **Function 3** for combo/mono therapy switches (uses regimen_breakout)
+9. **Function 2 allow_middle_drugs parameter:**
+   - FALSE = Only true treatment-free gaps (no drugs between)
+   - TRUE = Allow any drugs between occurrences
+10. **Function 3 switch_type parameter:**
+    - 'COMBO_TO_MONO' = Switched from combination to monotherapy
+    - 'MONO_TO_COMBO' = Switched from monotherapy to combination
+    - 'BOTH' = Either direction
+
+### Query Construction Rules
+11. **COUNT(DISTINCT patient_id) is most common for "how many patients" questions**
+12. **SELECT * or specific columns for "show me" or "list" questions**
+13. **Add ORDER BY and LIMIT for sample/example queries**
+14. **Drug names are case-insensitive and support partial matching**
+15. **Functions search BOTH regimen_grouped_name AND product_name columns**
+
+---
+
+## Common Question Patterns
+
+| Question Pattern | Function | Key Parameters |
+|------------------|----------|----------------|
+| "How many patients switched from A to B?" | Function 1 | drug_1='A', drug_2='B' |
+| "Patients on A then B then C" | Function 1 | drug_1='A', drug_2='B', drug_3='C' |
+| "A in 1L followed by B in 2L" | Function 1 | lot_filter=array(1,2), WHERE drug_1_lot=1 AND drug_2_lot=2 |
+| "Patients who restarted A" | Function 2 | drug_a='A', allow_middle_drugs=FALSE |
+| "Returned to A after other drugs" | Function 2 | drug_a='A', allow_middle_drugs=TRUE |
+| "A combo to A mono" | Function 3 | drug='A', switch_type='COMBO_TO_MONO' |
+| "Switched to combination therapy" | Function 3 | drug='A', switch_type='MONO_TO_COMBO' |
+| "In last X months/years" | All | Call get_latest_regimen_date() first |
+| "After at least 6 months" | Function 2 | min_gap_days=180 |
+| "Within 60 days" | Function 1 | max_gap_days=60 |
+

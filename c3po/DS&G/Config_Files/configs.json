@@ -1,0 +1,5 @@
+{
+    "list_of_bots" : ["Structured", "HIV_Structured", "Semi_Structured", "BYOD" , "DS&G"],
+    "list_of_data_sources" : ["business_rules"],
+    "deck_creation_classes" : [""]
+}
